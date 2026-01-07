@@ -1,5 +1,6 @@
 "use client";
 import { Place } from "@/components/MapView";
+import LocationPicker from "@/components/LocationPicker";
 
 type Props = {
   center: { lat: number; lng: number };
@@ -8,6 +9,7 @@ type Props = {
   results: Place[];
   selectedPlaceId: string | null;
   onSelectPlace: (id: string) => void;
+  onCenterChange: (c: { lat: number; lng: number }) => void;
 };
 
 export default function PlacesPanel(props: Props) {
@@ -18,6 +20,10 @@ export default function PlacesPanel(props: Props) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div style={{ fontWeight: 700 }}>Nearby results</div>
         <small style={{ color: "#778" }}>{center.lat.toFixed(4)}, {center.lng.toFixed(4)}</small>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <LocationPicker onCenterChange={props.onCenterChange} />
       </div>
 
       <div style={{ fontSize: 12, color: "#8a94a6", marginBottom: 8 }}>

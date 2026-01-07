@@ -126,6 +126,7 @@ export default function Page() {
         results={places}
         selectedPlaceId={selectedPlaceId}
         onSelectPlace={(id) => setSelectedPlaceId(id)}
+        onCenterChange={(c) => setCenter(c)}
       />
     </div>
   );
