@@ -1,0 +1,35 @@
+:root {
+  --bg: #0e0f12;
+  --panel-bg: #16181d;
+  --text: #e8eaed;
+  --muted: #9aa0a6;
+  --accent: #3ea6ff;
+  --border: #2a2e35;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+
+.app-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.app-header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+
+.app-main { display: grid; grid-template-columns: 280px 1fr; height: calc(100% - 48px); }
+.panel { border-right: 1px solid var(--border); background: var(--panel-bg); padding: 12px; overflow: auto; }
+.panel-section { margin-top: 12px; color: var(--muted); }
+
+.map-root { position: relative; }
+.map-canvas { position: absolute; inset: 0; outline: none; }
+.map-markers { position: absolute; inset: 0; pointer-events: none; }
+.map-marker { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px rgba(62,166,255,.25); pointer-events: auto; }
+
+.btn { appearance: none; border: 1px solid var(--border); background: #1d2127; color: var(--text); padding: 8px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-right: 8px; }
+.btn:hover { filter: brightness(1.05); }
+.btn-secondary { background: #14171b; }
+
+@media (max-width: 800px) {
+  .app-main { grid-template-columns: 1fr; }
+  .panel { border-right: none; border-bottom: 1px solid var(--border); }
+  .map-root { height: calc(100% - 200px); }
+}
+
