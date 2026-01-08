@@ -159,16 +159,27 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     // Add or update markers
     places.forEach((p) => {
       if (!markersRef.current.has(p.place_id)) {
-        const pin = new google.maps.marker.PinElement({
-          background: "#3ea6ff",
-          borderColor: "#0b5e9a",
-          glyphColor: "#001a2d",
-        });
+        // Custom beer icon marker
+        const el = document.createElement("div");
+        el.style.display = "grid";
+        el.style.placeItems = "center";
+        el.style.width = "28px";
+        el.style.height = "28px";
+        el.style.borderRadius = "50%";
+        el.style.background = "#ffffff";
+        el.style.border = "2px solid #d29922";
+        el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.35), 0 0 0 4px rgba(210,153,34,0.18)";
+        el.style.fontSize = "18px";
+        el.style.lineHeight = "1";
+        el.style.userSelect = "none";
+        el.setAttribute("aria-label", `Pub: ${p.name}`);
+        el.textContent = "🍺";
+
         const marker = new google.maps.marker.AdvancedMarkerElement({
           position: { lat: p.lat, lng: p.lng },
           map,
           title: p.name,
-          content: pin.element,
+          content: el,
         });
         marker.addListener("click", () => {
           if (onMarkerClick) onMarkerClick(p.place_id);
@@ -202,13 +213,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
         el.style.filter = "none";
       }
     });
-    if (selectedPlaceId) {
-      const m = markersRef.current.get(selectedPlaceId);
-      if (m && mapRef.current) {
-        mapRef.current.panTo(m.position as google.maps.LatLng | google.maps.LatLngLiteral);
-        mapRef.current.setZoom(Math.max((mapRef.current.getZoom() ?? 14), 15));
-      }
-    }
+    // intentionally not auto-panning to the selected marker to avoid map bounce
   }, [selectedPlaceId]);
 
   return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />;
