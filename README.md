@@ -84,3 +84,16 @@ http://localhost:3000
 
 ---
 Happy mapping!
+
+## Supabase Auth (optional)
+The app includes basic email/password auth backed by Supabase REST (PostgREST), used only from server routes.
+
+- Set these in `.env.local` using KEY=VALUE syntax:
+  - `SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co`
+  - `SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY` (from Project Settings → API)
+- Create required tables by running `services/supabase.sql` in the Supabase SQL editor:
+  - Creates/updates `public.profiles` (single-table auth). Re-run after pulling updates to ensure defaults.
+- If you get a PostgREST schema cache error after creating tables, run:
+  - `select pg_notify('pgrst', 'reload schema');`
+
+The service role key is used only on the server; never expose it to the client.

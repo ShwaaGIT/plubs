@@ -86,3 +86,82 @@
  POST /api/places/search 200 in 4193ms
  POST /api/places/search 200 in 4348ms
  POST /api/places/search 200 in 8ms
+ ✓ Compiled in 191ms (447 modules)
+ ✓ Compiled in 62ms (447 modules)
+ ✓ Compiled in 62ms (447 modules)
+ ✓ Compiled in 45ms (447 modules)
+ ✓ Compiled in 55ms (447 modules)
+ ✓ Compiled in 69ms (447 modules)
+ ✓ Compiled in 389ms (450 modules)
+ ✓ Compiled in 89ms (450 modules)
+ ✓ Compiled /api/places/search in 205ms (257 modules)
+ POST /api/places/search 200 in 5481ms
+ POST /api/places/search 200 in 4954ms
+ ✓ Compiled /_not-found in 380ms (453 modules)
+ GET / 404 in 700ms
+ GET /_next/static/chunks/main-app.js?v=1767854703979 404 in 48ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 48ms
+ GET /_next/static/chunks/app/layout.js 404 in 48ms
+ ✓ Compiled in 209ms (450 modules)
+ ✓ Compiled in 242ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 120ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 80ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 67ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 83ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 70ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 137ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 94ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 102ms (450 modules)
+ ✓ Compiled in 104ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 87ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 54ms (450 modules)
+   Reload env: .env.local
+ ✓ Compiled in 56ms (450 modules)
+ ✓ Compiled in 48ms (450 modules)
+ ✓ Compiled in 84ms (450 modules)
+ ✓ Compiled in 146ms (450 modules)
+ ✓ Compiled /middleware in 183ms (73 modules)
+ ✓ Compiled /_not-found in 167ms (453 modules)
+ GET /_next/static/webpack/d4513d8d728e63ff.webpack.hot-update.json 404 in 233ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ✓ Compiled /login in 80ms (461 modules)
+ GET /login 200 in 137ms
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/d4513d8d728e63ff.webpack.hot-update.json 404 in 10ms
+ ✓ Compiled /api/auth/me in 31ms (265 modules)
+ GET /api/auth/me 200 in 60ms
+ GET /api/auth/me 200 in 60ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat '/Users/joshbeehler/plubs-2/.next/server/app/api/places'
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving '../../../../.next/server/app/api/places/search/route' in /Users/joshbeehler/plubs-2/node_modules/next/dist/server for build dependencies doesn't lead to expected result '/Users/joshbeehler/plubs-2/.next/server/app/api/places/search/route.js', but to 'Error: Can't resolve '../../../../.next/server/app/api/places/search/route' in '/Users/joshbeehler/plubs-2/node_modules/next/dist/server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ../../../../.next/server/app/api/places/search/route (expected /Users/joshbeehler/plubs-2/.next/server/app/api/places/search/route.js)
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/server/require.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/server/require.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/server/load-components.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/server/load-components.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/build/utils.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/build/utils.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/loaders/next-app-loader.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/loaders/next-app-loader.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/compiled/loader-runner/LoaderRunner.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/compiled/loader-runner/LoaderRunner.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/compiled/webpack/bundle5.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/compiled/webpack/bundle5.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/compiled/webpack/webpack.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/compiled/webpack/webpack.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/plugins/define-env-plugin.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/plugins/define-env-plugin.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/build/swc/index.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/build/swc/index.js
+<w>  at file dependencies /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/loaders/next-swc-loader.js
+<w>  at file /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/loaders/next-swc-loader.js
+<w>  at resolve commonjs /Users/joshbeehler/plubs-2/node_modules/next/dist/build/webpack/loaders/next-swc-loader.js
