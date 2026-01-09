@@ -1,0 +1,18 @@
+; How to use:
+;   git filter-repo --replace-text tools/git-filter-repo-replacements.txt
+; Notes:
+; - Lines beginning with ';' are comments.
+; - Use literal matches for known leaked secrets (safer), or regex rules for patterns.
+; - For regex: prefix with 'regex:' and use '==>' to separate pattern and replacement.
+
+; Example literal replacements (replace PLACEHOLDER_* with the actual leaked values before running):
+; PLACEHOLDER_SUPABASE_SERVICE_ROLE_JWT==>REDACTED_SUPABASE_SERVICE_ROLE
+; PLACEHOLDER_GOOGLE_API_KEY==>REDACTED_GOOGLE_API_KEY
+
+; Example regex (broad, use carefully):
+; - Google API key pattern (starts with AIza, 39 chars typically). Replace with a token.
+regex:AIza[0-9A-Za-z_\-]{35}==>REDACTED_GOOGLE_API_KEY
+
+; - JWT-like tokens (header.payload.signature). This may catch benign tokens; prefer literal when possible.
+;   Adjust length quantifiers to match the leaked token exactly to avoid over-replacement.
+regex:eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}==>REDACTED_JWT

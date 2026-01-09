@@ -97,3 +97,11 @@ The app includes basic email/password auth backed by Supabase REST (PostgREST), 
   - `select pg_notify('pgrst', 'reload schema');`
 
 The service role key is used only on the server; never expose it to the client.
+
+## Repo Notes
+- .gitignore: `node_modules/`, `.next/`, env files and logs are ignored. After cloning, run `npm install` to restore dependencies.
+- History rewrite: The repository history was cleaned to remove large build artifacts that exceeded GitHub’s 100MB limit. If you cloned this repo before this change, run:
+  - `git fetch`
+  - `git reset --hard origin/main`
+  Make sure you don’t have uncommitted local changes before resetting.
+- Rationale: GitHub rejects pushes with files over 100MB; removing `node_modules/` and `.next/` from history keeps the repo small and fast.
