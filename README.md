@@ -78,7 +78,7 @@ http://localhost:3000
 - Restrict your API keys: HTTP referrer restrictions for the browser key; IP or hostname restrictions for the server key if possible.
 
 ## Customization Tips
-- To change default center, edit `app/page.tsx` (London by default).
+- To change default center, edit `app/page.tsx` (Brisbane by default).
 - To adjust the result limit or cache TTL, see `lib/googlePlaces.ts`.
 - Styling lives inline in components for simplicity; migrate to CSS Modules or Tailwind if preferred.
 

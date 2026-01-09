@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Place } from "@/components/MapView";
-import PlacesPanel from "@/components/PlacesPanel";
 
 type SearchPayload = {
   centerLat: number;
@@ -12,7 +11,7 @@ type SearchPayload = {
 };
 
 export default function Page() {
-  const [center, setCenter] = useState({ lat: 51.5074, lng: -0.1278 }); // London default
+  const [center, setCenter] = useState({ lat: -27.4698, lng: 153.0251 }); // Brisbane default
   // Always search for all categories now
   const filters = useMemo(() => ({ pubs: true, clubs: true, bars: true }), []);
   const [radius, setRadius] = useState<number>(1000);
@@ -119,15 +118,63 @@ export default function Page() {
         onViewportChanged={handleViewportChanged}
         onMarkerClick={(id) => setSelectedPlaceId(id)}
       />
-      <PlacesPanel
-        center={center}
-        loading={loading}
-        error={error}
-        results={places}
-        selectedPlaceId={selectedPlaceId}
-        onSelectPlace={(id) => setSelectedPlaceId(id)}
-        onCenterChange={(c) => setCenter(c)}
-      />
+      {/* My Location button (top-right) */}
+      <button
+        type="button"
+        aria-label="Go to my location"
+        title="Go to my location"
+        onClick={() => {
+          if (userLocation) {
+            setCenter(userLocation);
+            return;
+          }
+          if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+              (err) => console.warn("Geolocation error:", err?.message || err),
+              { enableHighAccuracy: true, timeout: 10000 }
+            );
+          }
+        }}
+        style={{
+          position: "absolute",
+          right: 16,
+          top: 16,
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          background: "#ffffff",
+          color: "#1f2937",
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+          display: "grid",
+          placeItems: "center",
+          cursor: "pointer",
+          zIndex: 10,
+          padding: 0,
+          lineHeight: 0,
+        }}
+      >
+        {/* crosshair/target icon */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 2v3" />
+          <path d="M12 19v3" />
+          <path d="M2 12h3" />
+          <path d="M19 12h3" />
+          <circle cx="12" cy="12" r="4" />
+        </svg>
+      </button>
     </div>
   );
 }
