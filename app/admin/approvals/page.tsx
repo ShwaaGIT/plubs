@@ -64,29 +64,63 @@ export default function AdminApprovalsPage() {
     load();
   }, []);
 
+  function makeKeys(r: PendingRow) {
+    const venueLabel = r.venues?.name || "Unknown venue";
+    const addr = r.venues?.formatted_address || [r.venues?.suburb, r.venues?.state].filter(Boolean).join(", ");
+    const prod = r.product_sizes?.products;
+    const productKey = [prod?.category || "", prod?.brand || "", prod?.name || "", r.product_sizes?.size_label || "", r.product_sizes?.ml ?? ""].join("|");
+    const venueKey = r.venues?.place_id || `${venueLabel}|${addr}`;
+    return { venueKey, productKey };
+  }
+
   async function approve(id: string) {
-    const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(id)}/approve`, { method: "POST" });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data?.error || "Approve failed");
-      return;
-    }
-    setRows((prev) => prev.filter((r) => r.id !== id));
+    // Approve all matching rows in same venue+product group with the same price
+    const target = rows.find((r) => r.id === id);
+    if (!target) return;
+    const { venueKey, productKey } = makeKeys(target);
+    const price = target.price_cents;
+    const batch = rows.filter((r) => {
+      const k = makeKeys(r);
+      return k.venueKey === venueKey && k.productKey === productKey && r.price_cents === price;
+    });
+    const ids = Array.from(new Set(batch.map((r) => r.id)));
+    const results = await Promise.all(
+      ids.map(async (rid) => {
+        const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(rid)}/approve`, { method: "POST" });
+        return { rid, ok: res.ok, err: res.ok ? null : await res.json().catch(() => ({})) };
+      })
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length) alert(`Some approvals failed (${failed.length}/${ids.length}).`);
+    const succeeded = new Set(results.filter((r) => r.ok).map((r) => r.rid));
+    setRows((prev) => prev.filter((r) => !succeeded.has(r.id)));
   }
 
   async function reject(id: string) {
-    const note = window.prompt("Optional: add a moderation note", "");
-    const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(id)}/reject`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: note || null }),
+    const note = window.prompt("Optional: add a moderation note (applies to all in this price group)", "");
+    const target = rows.find((r) => r.id === id);
+    if (!target) return;
+    const { venueKey, productKey } = makeKeys(target);
+    const price = target.price_cents;
+    const batch = rows.filter((r) => {
+      const k = makeKeys(r);
+      return k.venueKey === venueKey && k.productKey === productKey && r.price_cents === price;
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(data?.error || "Reject failed");
-      return;
-    }
-    setRows((prev) => prev.filter((r) => r.id !== id));
+    const ids = Array.from(new Set(batch.map((r) => r.id)));
+    const results = await Promise.all(
+      ids.map(async (rid) => {
+        const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(rid)}/reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: note || null }),
+        });
+        return { rid, ok: res.ok, err: res.ok ? null : await res.json().catch(() => ({})) };
+      })
+    );
+    const failed = results.filter((r) => !r.ok);
+    if (failed.length) alert(`Some rejections failed (${failed.length}/${ids.length}).`);
+    const succeeded = new Set(results.filter((r) => r.ok).map((r) => r.rid));
+    setRows((prev) => prev.filter((r) => !succeeded.has(r.id)));
   }
 
   return (
