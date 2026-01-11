@@ -9,7 +9,7 @@ type PendingRow = {
   notes: string | null;
   submitted_by: string | null;
   created_at: string;
-  venues?: { name?: string | null; formatted_address?: string | null; suburb?: string | null; state?: string | null } | null;
+  venues?: { place_id?: string | null; name?: string | null; formatted_address?: string | null; suburb?: string | null; state?: string | null } | null;
   product_sizes?: { size_label?: string | null; ml?: number | null; products?: { brand?: string | null; name?: string | null; category?: string | null } | null } | null;
 };
 
@@ -17,6 +17,33 @@ export default function AdminApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PendingRow[]>([]);
+
+  // Group by venue + product/size; count agreeing price submissions
+  const groups = (() => {
+    const map = new Map<string, { key: string; venueLabel: string; addr: string; venueSort: string; productLabel: string; sizeLabel: string; rows: PendingRow[] }>();
+    for (const r of rows) {
+      const venueLabel = r.venues?.name || "Unknown venue";
+      const addr = r.venues?.formatted_address || [r.venues?.suburb, r.venues?.state].filter(Boolean).join(", ");
+      const prod = r.product_sizes?.products;
+      const productLabel = [prod?.brand, prod?.name].filter(Boolean).join(" ") || "Unknown product";
+      const sizeLabel = [r.product_sizes?.size_label, r.product_sizes?.ml ? `${r.product_sizes?.ml}ml` : null].filter(Boolean).join(" • ");
+      const productKey = [prod?.category || "", prod?.brand || "", prod?.name || "", r.product_sizes?.size_label || "", r.product_sizes?.ml ?? ""].join("|");
+      const venueKey = r.venues?.place_id || `${venueLabel}|${addr}`;
+      const key = `${venueKey}||${productKey}`;
+      if (!map.has(key)) {
+        map.set(key, { key, venueLabel, addr, venueSort: [r.venues?.state || "", r.venues?.suburb || "", venueLabel].join("|"), productLabel, sizeLabel, rows: [] });
+      }
+      map.get(key)!.rows.push(r);
+    }
+    const arr = Array.from(map.values());
+    arr.sort((a, b) => (a.venueSort.localeCompare(b.venueSort) || a.productLabel.localeCompare(b.productLabel) || a.sizeLabel.localeCompare(b.sizeLabel)));
+    return arr.map((g) => {
+      const priceCounts = new Map<number, number>();
+      for (const r of g.rows) priceCounts.set(r.price_cents, (priceCounts.get(r.price_cents) || 0) + 1);
+      const prices = Array.from(priceCounts.entries()).map(([price_cents, count]) => ({ price_cents, count })).sort((a, b) => a.price_cents - b.price_cents);
+      return { ...g, prices };
+    });
+  })();
 
   async function load() {
     setLoading(true);
@@ -69,39 +96,46 @@ export default function AdminApprovalsPage() {
       {error && <div style={{ color: "#ff6b6b" }}>{error}</div>}
       {!loading && !rows.length && !error && <div>No pending reports</div>}
 
-      <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-        {rows.map((r) => {
-          const venueLabel = r.venues?.name || "Unknown venue";
-          const addr = r.venues?.formatted_address || [r.venues?.suburb, r.venues?.state].filter(Boolean).join(", ");
-          const prod = r.product_sizes?.products;
-          const productLabel = [prod?.brand, prod?.name].filter(Boolean).join(" ") || "Unknown product";
-          const sizeLabel = [r.product_sizes?.size_label, r.product_sizes?.ml ? `${r.product_sizes?.ml}ml` : null]
-            .filter(Boolean)
-            .join(" • ");
-          const price = (r.price_cents ?? 0) / 100;
-          const when = r.observed_at ? new Date(r.observed_at).toLocaleString() : "Unknown time";
-          return (
-            <div key={r.id} style={{
-              border: "1px solid #2a2e35",
-              borderRadius: 8,
-              padding: 12,
-              background: "#0f1318",
-              display: "grid",
-              gap: 6,
-            }}>
-              <div style={{ fontWeight: 600 }}>{venueLabel}</div>
-              <div style={{ color: "#aab" }}>{addr}</div>
-              <div>{productLabel} {sizeLabel ? `(${sizeLabel})` : ""}</div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>${price.toFixed(2)}</div>
-              {r.notes ? <div style={{ color: "#ccd" }}>Note: {r.notes}</div> : null}
-              <div style={{ color: "#889" }}>Observed: {when}</div>
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <button type="button" onClick={() => approve(r.id)} style={btnPrimary}>Approve</button>
-                <button type="button" onClick={() => reject(r.id)} style={btnDanger}>Reject</button>
+      <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+        {groups.map((g) => (
+          <div key={g.key} style={{ border: "1px solid #2a2e35", borderRadius: 8, background: "#0f1318" }}>
+            <div style={{ padding: 12, borderBottom: "1px solid #2a2e35", display: "grid", gap: 4 }}>
+              <div style={{ fontWeight: 700 }}>{g.venueLabel}</div>
+              <div style={{ color: "#aab" }}>{g.addr}</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span>{g.productLabel}{g.sizeLabel ? ` (${g.sizeLabel})` : ""}</span>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {g.prices.map((p) => (
+                    <span key={p.price_cents} style={chip} title={`${p.count} submission${p.count === 1 ? "" : "s"} at this price`}>
+                      ${ (p.price_cents / 100).toFixed(2) } × {p.count}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          );
-        })}
+            <div style={{ display: "grid", gap: 8, padding: 12 }}>
+              {g.rows
+                .slice()
+                .sort((a, b) => (a.price_cents - b.price_cents) || (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
+                .map((r) => {
+                  const when = r.observed_at ? new Date(r.observed_at).toLocaleString() : "Unknown time";
+                  return (
+                    <div key={r.id} style={{ display: "grid", gap: 6, border: "1px dashed #2a2e35", borderRadius: 6, padding: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: 16, fontWeight: 700 }}>${(r.price_cents / 100).toFixed(2)}</div>
+                        <div style={{ color: "#889", fontSize: 12 }}>Observed: {when}</div>
+                      </div>
+                      {r.notes ? <div style={{ color: "#ccd" }}>Note: {r.notes}</div> : null}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button type="button" onClick={() => approve(r.id)} style={btnPrimary}>Approve</button>
+                        <button type="button" onClick={() => reject(r.id)} style={btnDanger}>Reject</button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -125,4 +159,3 @@ const btnDanger: React.CSSProperties = {
   color: "#140808",
   borderColor: "#dc2626",
 };
-
