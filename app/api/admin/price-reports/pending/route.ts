@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     "created_at",
     // related data for context
     "venues(place_id:google_place_id,name,formatted_address,suburb,state,country)",
-    "product_sizes(size_label,ml,products(brand,name,category))",
+    "product_sizes(size_label,ml,products(brand,name,category,mixer))",
   ].join(",");
 
   const path = `/price_reports?select=${encodeURIComponent(select)}&status=eq.pending&order=created_at.asc&limit=100`;

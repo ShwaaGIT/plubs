@@ -17,6 +17,7 @@ export default function AdminApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PendingRow[]>([]);
+  const [approvedMap, setApprovedMap] = useState<Record<string, { latest_price_cents: number | null; latest_count: number; counts: Array<{ price_cents: number; count: number }> }>>({});
 
   // Group by venue + product/size; count agreeing price submissions
   const groups = (() => {
@@ -64,6 +65,49 @@ export default function AdminApprovalsPage() {
     load();
   }, []);
 
+  // After rows load, fetch approved summaries for each group
+  useEffect(() => {
+    if (!rows.length) {
+      setApprovedMap({});
+      return;
+    }
+    const uniqueGroups: Array<{ key: string; place_id: string; category?: string | null; brand?: string | null; name?: string | null; mixer?: string | null; size_label?: string | null; ml?: number | null }> = [];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const place_id = r.venues?.place_id || "";
+      if (!place_id) continue;
+      const prod = r.product_sizes?.products;
+      const category = prod?.category || null;
+      const brand = prod?.brand || null;
+      const name = prod?.name || null;
+      const mixer = (prod as any)?.mixer || null;
+      const size_label = r.product_sizes?.size_label || null;
+      const ml = r.product_sizes?.ml ?? null;
+      const key = [place_id, category || "", brand || "", name || "", mixer || "", size_label || "", ml ?? ""].join("||");
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueGroups.push({ key, place_id, category, brand, name, mixer, size_label, ml });
+      }
+    }
+    if (!uniqueGroups.length) return;
+    fetch("/api/admin/price-reports/approved-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groups: uniqueGroups.map(({ key, ...g }) => g) }),
+    })
+      .then((r) => r.json())
+      .then((dj) => {
+        const map: Record<string, { latest_price_cents: number | null; latest_count: number; counts: Array<{ price_cents: number; count: number }> }> = {};
+        if (Array.isArray(dj?.results)) {
+          for (const row of dj.results as Array<{ key: string; latest_price_cents: number | null; latest_count: number; counts: Array<{ price_cents: number; count: number }> }>) {
+            map[row.key] = { latest_price_cents: row.latest_price_cents, latest_count: row.latest_count, counts: row.counts };
+          }
+        }
+        setApprovedMap(map);
+      })
+      .catch(() => setApprovedMap({}));
+  }, [rows]);
+
   function makeKeys(r: PendingRow) {
     const venueLabel = r.venues?.name || "Unknown venue";
     const addr = r.venues?.formatted_address || [r.venues?.suburb, r.venues?.state].filter(Boolean).join(", ");
@@ -84,6 +128,7 @@ export default function AdminApprovalsPage() {
       return k.venueKey === venueKey && k.productKey === productKey && r.price_cents === price;
     });
     const ids = Array.from(new Set(batch.map((r) => r.id)));
+    if (!window.confirm(`Approve ${ids.length} submission${ids.length === 1 ? "" : "s"} at $${(price/100).toFixed(2)} for this venue/product?`)) return;
     const results = await Promise.all(
       ids.map(async (rid) => {
         const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(rid)}/approve`, { method: "POST" });
@@ -107,6 +152,7 @@ export default function AdminApprovalsPage() {
       return k.venueKey === venueKey && k.productKey === productKey && r.price_cents === price;
     });
     const ids = Array.from(new Set(batch.map((r) => r.id)));
+    if (!window.confirm(`Reject ${ids.length} submission${ids.length === 1 ? "" : "s"} at $${(price/100).toFixed(2)} for this venue/product?`)) return;
     const results = await Promise.all(
       ids.map(async (rid) => {
         const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(rid)}/reject`, {
@@ -144,6 +190,16 @@ export default function AdminApprovalsPage() {
                       ${ (p.price_cents / 100).toFixed(2) } × {p.count}
                     </span>
                   ))}
+                  {/* Show existing accepted baseline if any */}
+                  {(() => {
+                    const approved = approvedMap[[g.rows[0]?.venues?.place_id || "", (g.rows[0]?.product_sizes?.products?.category) || "", (g.rows[0]?.product_sizes?.products?.brand) || "", (g.rows[0]?.product_sizes?.products?.name) || "", (g.rows[0] as any)?.product_sizes?.products?.mixer || "", g.rows[0]?.product_sizes?.size_label || "", g.rows[0]?.product_sizes?.ml ?? ""].join("||")];
+                    if (!approved || approved.latest_price_cents == null) return null;
+                    return (
+                      <span style={{ ...chip, background: "#1f2937", borderColor: "#334155" }} title={`Accepted price with ${approved.latest_count} approved submission(s)`}>
+                        Accepted: ${ (approved.latest_price_cents / 100).toFixed(2) } × {approved.latest_count}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
