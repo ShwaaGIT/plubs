@@ -25,16 +25,38 @@ export async function POST(req: Request) {
     const productId = await ensureProduct(body.product.brand, body.product.name, body.product.category || null, body.product.mixer ?? null);
     const sizeId = await ensureProductSize(productId, body.size.size_label || null, body.size.ml ?? null);
 
-    const payload = [{
-      venue_id: venueId,
-      product_size_id: sizeId,
-      price_cents: Math.round(body.price_cents),
-      observed_at: body.observed_at || null,
-      notes: body.notes || null,
-      membership: typeof body.membership === "boolean" ? body.membership : null,
-      submitted_by: profileId || null,
-      status: "pending",
-    }];
+    // Determine if this submission matches the currently accepted price for this venue/product/size
+    const membership = typeof body.membership === "boolean" ? body.membership : null;
+    const submittedPrice = Math.round(body.price_cents);
+    let autoApprove = false;
+    try {
+      let path = `/price_reports?select=price_cents,membership,created_at&status=eq.approved&venue_id=eq.${encodeURIComponent(
+        venueId
+      )}&product_size_id=eq.${encodeURIComponent(sizeId)}&order=created_at.desc&limit=1`;
+      if (membership === true) {
+        path += `&membership=is.true`;
+      } else {
+        // Treat false/null as equivalent to non-member
+        path += `&or=(membership.is.false,membership.is.null)`;
+      }
+      const latest = (await sbJson(path)) as Array<{ price_cents: number; membership: boolean | null; created_at: string }>;
+      if (Array.isArray(latest) && latest[0]?.price_cents === submittedPrice) autoApprove = true;
+    } catch {}
+
+    const payload = [
+      {
+        venue_id: venueId,
+        product_size_id: sizeId,
+        price_cents: submittedPrice,
+        observed_at: body.observed_at || null,
+        notes: body.notes || null,
+        membership,
+        submitted_by: profileId || null,
+        status: autoApprove ? "approved" : "pending",
+        moderated_at: autoApprove ? new Date().toISOString() : null,
+        moderation_note: autoApprove ? "auto-approved: matches current accepted price" : null,
+      },
+    ];
 
     await sbJson(`/price_reports`, {
       method: "POST",
