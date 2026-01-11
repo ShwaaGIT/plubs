@@ -27,6 +27,9 @@ export async function POST(req: Request) {
         display_name: uname,
         password_hash: digest.hash,
         password_salt: digest.salt,
+        // Initialize new columns
+        trust_score: 50,
+        admin: false,
       },
     ];
 

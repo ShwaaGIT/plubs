@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Place } from "@/components/MapView";
+import AdminMenu from "@/components/AdminMenu";
+import AddPriceModal from "@/components/AddPriceModal";
+import PriceFilterMenu, { Selection } from "@/components/PriceFilterMenu";
 
 type SearchPayload = {
   centerLat: number;
@@ -18,6 +21,10 @@ export default function Page() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [placePrices, setPlacePrices] = useState<Record<string, number>>({});
+  const [addPriceOpen, setAddPriceOpen] = useState(false);
+  const [selection, setSelection] = useState<Selection>({ category: "beer", product_name: null, size_label: "Schooner", ml: null, membership: "non-member" });
+  const selectedPlace = useMemo(() => places.find((p) => p.place_id === selectedPlaceId) || null, [places, selectedPlaceId]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,12 +50,37 @@ export default function Page() {
       const data = (await res.json()) as { results: Place[] };
       setPlaces(data.results);
       if (data.results.length) setSelectedPlaceId(data.results[0].place_id);
+      // Fetch latest approved prices for these places, filtered by current selection
+      const ids = data.results.map((p) => p.place_id);
+      if (ids.length) {
+        try {
+          const pr = await fetch("/api/places/prices", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ place_ids: ids, filter: selectionToFilter(selection) }),
+          });
+          const pj = await pr.json();
+          if (pr.ok && Array.isArray(pj.results)) {
+            const map: Record<string, number> = {};
+            for (const r of pj.results as Array<{ place_id: string; price_cents: number }>) {
+              map[r.place_id] = r.price_cents;
+            }
+            setPlacePrices(map);
+          } else {
+            setPlacePrices({});
+          }
+        } catch {
+          setPlacePrices({});
+        }
+      } else {
+        setPlacePrices({});
+      }
     } catch (e: any) {
       setError(e.message || "Search failed");
     } finally {
       setLoading(false);
     }
-  }, [center.lat, center.lng, radius, filters]);
+  }, [center.lat, center.lng, radius, filters, selection]);
 
   // Geolocate and center on the user's location (track movement)
   useEffect(() => {
@@ -107,16 +139,68 @@ export default function Page() {
     }
   }, [places, selectedPlaceId]);
 
+  const placesWithPrices: Place[] = useMemo(() => {
+    return places.map((p) => ({ ...p, price_cents: placePrices[p.place_id] } as Place));
+  }, [places, placePrices]);
+
   return (
     <div style={{ position: "fixed", inset: 0 }}>
+      <PriceFilterMenu
+        value={selection}
+        onChange={(sel) => {
+          setSelection(sel);
+          // Refetch prices for current places
+          const ids = places.map((p) => p.place_id);
+          if (ids.length) {
+            fetch("/api/places/prices", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ place_ids: ids, filter: selectionToFilter(sel) }),
+            })
+              .then((r) => r.json())
+              .then((pj) => {
+                if (Array.isArray(pj?.results)) {
+                  const map: Record<string, number> = {};
+                  for (const r of pj.results as Array<{ place_id: string; price_cents: number }>) map[r.place_id] = r.price_cents;
+                  setPlacePrices(map);
+                } else {
+                  setPlacePrices({});
+                }
+              })
+              .catch(() => setPlacePrices({}));
+          } else {
+            setPlacePrices({});
+          }
+        }}
+      />
       <MapView
         center={center}
-        places={places}
+        places={placesWithPrices}
         selectedPlaceId={selectedPlaceId}
+        labelCategory={selection.category}
         userLocation={userLocation || undefined}
         onCenterChanged={(c) => setCenter(c)}
         onViewportChanged={handleViewportChanged}
         onMarkerClick={(id) => setSelectedPlaceId(id)}
+        onPlaceOptions={(id) => {
+          setSelectedPlaceId(id);
+          setAddPriceOpen(true);
+        }}
+      />
+      {/* Add price modal */}
+      {selectedPlace && addPriceOpen && (
+        <AddPriceModal
+          place={selectedPlace}
+          onClose={() => setAddPriceOpen(false)}
+          onSubmitted={() => {
+            // waits for admin approval to reflect on map
+          }}
+        />
+      )}
+      <AdminMenu
+        onApproved={(pid, price) => {
+          setPlacePrices((prev) => ({ ...prev, [pid]: price }));
+        }}
       />
       {/* My Location button (top-right) */}
       <button
@@ -139,7 +223,7 @@ export default function Page() {
         style={{
           position: "absolute",
           right: 16,
-          top: 16,
+          bottom: 16,
           width: 44,
           height: 44,
           borderRadius: "50%",
@@ -177,6 +261,17 @@ export default function Page() {
       </button>
     </div>
   );
+}
+
+function selectionToFilter(sel: Selection) {
+  if (sel.category === "beer") {
+    return { category: "beer", product_name: sel.product_name || null, size_label: sel.size_label || null, ml: null, membership: sel.membership === "member" };
+  }
+  if (sel.category === "wine") {
+    return { category: "wine", product_name: sel.product_name || null, size_label: sel.size_label || null, ml: sel.ml ?? null, membership: sel.membership === "member" };
+  }
+  // spirits
+  return { category: "spirits", product_name: sel.spirit || null, mixer: sel.mixer || null, size_label: sel.size_label || null, ml: null, membership: sel.membership === "member" };
 }
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {

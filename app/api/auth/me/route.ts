@@ -9,12 +9,12 @@ export async function GET(req: Request) {
     if (!profileId) return NextResponse.json({ user: null }, { status: 200 });
 
     const id = encodeURIComponent(profileId);
-    const res = await sbFetch(`/profiles?select=id,email,display_name&id=eq.${id}&limit=1`);
+    const res = await sbFetch(`/profiles?select=id,email,display_name,admin&id=eq.${id}&limit=1`);
     if (!res.ok) return NextResponse.json({ user: null }, { status: 200 });
     const rows = (await res.json()) as any[];
     const row = rows[0];
     if (!row) return NextResponse.json({ user: null }, { status: 200 });
-    const user = { id: row.id, email: row.email, display_name: row.display_name };
+    const user = { id: row.id, email: row.email, display_name: row.display_name, admin: !!row.admin } as const;
     return NextResponse.json({ user }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ user: null }, { status: 200 });

@@ -1,6 +1,15 @@
 "use client";
 import { useEffect, useMemo, useRef } from "react";
 
+function verticalEllipsisSvg() {
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+  <circle cx="12" cy="5" r="2"/>
+  <circle cx="12" cy="12" r="2"/>
+  <circle cx="12" cy="19" r="2"/>
+</svg>`;
+}
+
 export type Place = {
   place_id: string;
   name: string;
@@ -10,6 +19,7 @@ export type Place = {
   rating?: number;
   user_ratings_total?: number;
   types?: string[];
+  price_cents?: number;
 };
 
 type Props = {
@@ -17,6 +27,7 @@ type Props = {
   places: Place[];
   selectedPlaceId: string | null;
   userLocation?: { lat: number; lng: number };
+  labelCategory?: "beer" | "wine" | "spirits";
   onCenterChanged?: (center: { lat: number; lng: number }) => void;
   onViewportChanged?: (v: {
     center: { lat: number; lng: number };
@@ -24,6 +35,7 @@ type Props = {
     zoom?: number;
   }) => void;
   onMarkerClick?: (placeId: string) => void;
+  onPlaceOptions?: (placeId: string) => void;
 };
 
 declare global {
@@ -32,7 +44,7 @@ declare global {
   }
 }
 
-export default function MapView({ center, places, selectedPlaceId, userLocation, onCenterChanged, onViewportChanged, onMarkerClick }: Props) {
+export default function MapView({ center, places, selectedPlaceId, userLocation, labelCategory = "beer", onCenterChanged, onViewportChanged, onMarkerClick, onPlaceOptions }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
@@ -159,21 +171,23 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     // Add or update markers
     places.forEach((p) => {
       if (!markersRef.current.has(p.place_id)) {
-        // Custom beer icon marker
+        // Custom beer icon marker with optional price
         const el = document.createElement("div");
-        el.style.display = "grid";
-        el.style.placeItems = "center";
-        el.style.width = "28px";
+        el.style.display = "inline-flex";
+        el.style.alignItems = "center";
+        el.style.gap = "4px";
+        el.style.minWidth = "28px";
         el.style.height = "28px";
-        el.style.borderRadius = "50%";
+        el.style.padding = "0 6px";
+        el.style.borderRadius = "14px";
         el.style.background = "#ffffff";
         el.style.border = "2px solid #d29922";
         el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.35), 0 0 0 4px rgba(210,153,34,0.18)";
-        el.style.fontSize = "18px";
+        el.style.fontSize = "16px";
         el.style.lineHeight = "1";
         el.style.userSelect = "none";
         el.setAttribute("aria-label", `Pub: ${p.name}`);
-        el.textContent = "🍺";
+        el.innerHTML = markerLabelHtml(p.price_cents, labelCategory);
 
         const marker = new google.maps.marker.AdvancedMarkerElement({
           position: { lat: p.lat, lng: p.lng },
@@ -183,22 +197,41 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
         });
         marker.addListener("click", () => {
           if (onMarkerClick) onMarkerClick(p.place_id);
-          const html = `<div style="max-width:220px"><div style="font-weight:600;margin-bottom:4px">${escapeHtml(
-            p.name
-          )}</div>${p.rating ? `⭐ ${p.rating} (${p.user_ratings_total ?? 0})<br/>` : ""}<div style="color:#555">${escapeHtml(
-            p.address
-          )}</div></div>`;
-        
+          const optsId = `opts-${Math.random().toString(36).slice(2)}`;
+          const html = `<div style="position:relative;max-width:260px;padding-right:28px">`
+            + `<button id="${optsId}" aria-label="Place options" title="Place options" style="position:absolute;right:0;top:0;width:24px;height:24px;display:grid;place-items:center;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.15);cursor:pointer">`
+            + `${verticalEllipsisSvg()}`
+            + `</button>`
+            + `<div style="font-weight:600;margin-bottom:4px">${escapeHtml(p.name)}</div>`
+            + `${p.rating ? `⭐ ${p.rating} (${p.user_ratings_total ?? 0})<br/>` : ""}`
+            + `<div style="color:#555">${escapeHtml(p.address)}</div>`
+            + `</div>`;
+
           infoRef.current?.setContent(html);
           infoRef.current?.open({ map, anchor: marker });
+
+          if (infoRef.current) {
+            // @ts-ignore Using Maps event util available at runtime
+            google.maps.event.addListenerOnce(infoRef.current, "domready", () => {
+              const btn = document.getElementById(optsId);
+              if (btn) {
+                btn.addEventListener("click", (ev) => {
+                  ev.stopPropagation();
+                  if (onPlaceOptions) onPlaceOptions(p.place_id);
+                });
+              }
+            });
+          }
         });
         markersRef.current.set(p.place_id, marker);
       } else {
         const m = markersRef.current.get(p.place_id)!;
         m.position = { lat: p.lat, lng: p.lng } as any;
+        const el = m.content as HTMLElement | null;
+        if (el) el.innerHTML = markerLabelHtml(p.price_cents, labelCategory);
       }
     });
-  }, [places]);
+  }, [places, labelCategory]);
 
   // Highlight selection
   useEffect(() => {
@@ -217,6 +250,22 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
   }, [selectedPlaceId]);
 
   return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />;
+}
+
+function markerLabelHtml(price_cents?: number, cat: "beer" | "wine" | "spirits" = "beer") {
+  const have = typeof price_cents === "number" && isFinite(price_cents) && price_cents > 0;
+  const price = have ? `$${formatCents(price_cents!)}` : "";
+  // Using simple HTML; values derived from numbers only
+  const icon = cat === "wine" ? "🍷" : cat === "spirits" ? "🥃" : "🍺";
+  return `<span aria-hidden="true">${icon}</span>${have ? `<span style=\"font-weight:600;font-size:14px;color:#1f2937\">${price}</span>` : ""}`;
+}
+
+function formatCents(cents: number): string {
+  const abs = Math.abs(cents);
+  const dollars = Math.floor(abs / 100);
+  const remainder = abs % 100;
+  const sign = cents < 0 ? "-" : "";
+  return `${sign}${dollars}.${String(remainder).padStart(2, "0")}`;
 }
 
 function escapeHtml(s: string) {
