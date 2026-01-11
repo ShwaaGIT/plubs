@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PendingRow = {
   id: string;
@@ -18,6 +18,7 @@ export default function AdminApprovalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [approvedMap, setApprovedMap] = useState<Record<string, { latest_price_cents: number | null; latest_count: number; counts: Array<{ price_cents: number; count: number }> }>>({});
+  const autoApproved = useRef<Set<string>>(new Set());
 
   // Group by venue + product/size; count agreeing price submissions
   const groups = (() => {
@@ -69,6 +70,7 @@ export default function AdminApprovalsPage() {
   useEffect(() => {
     if (!rows.length) {
       setApprovedMap({});
+      autoApproved.current.clear();
       return;
     }
     const uniqueGroups: Array<{ key: string; place_id: string; category?: string | null; brand?: string | null; name?: string | null; mixer?: string | null; size_label?: string | null; ml?: number | null }> = [];
@@ -107,6 +109,42 @@ export default function AdminApprovalsPage() {
       })
       .catch(() => setApprovedMap({}));
   }, [rows]);
+
+  // Auto-approve pending submissions that match the currently accepted price for their group
+  useEffect(() => {
+    if (!rows.length || !approvedMap) return;
+    const toApprove: string[] = [];
+    for (const r of rows) {
+      const place_id = r.venues?.place_id || "";
+      if (!place_id) continue;
+      const prod = r.product_sizes?.products;
+      const key = [
+        place_id,
+        prod?.category || "",
+        prod?.brand || "",
+        prod?.name || "",
+        (prod as any)?.mixer || "",
+        r.product_sizes?.size_label || "",
+        r.product_sizes?.ml ?? "",
+      ].join("||");
+      const approved = approvedMap[key];
+      if (approved && approved.latest_price_cents != null && approved.latest_price_cents === r.price_cents) {
+        if (!autoApproved.current.has(r.id)) toApprove.push(r.id);
+      }
+    }
+    if (!toApprove.length) return;
+    (async () => {
+      const results = await Promise.all(
+        toApprove.map(async (rid) => {
+          const res = await fetch(`/api/admin/price-reports/${encodeURIComponent(rid)}/approve`, { method: "POST" });
+          return { rid, ok: res.ok };
+        })
+      );
+      const succeeded = new Set(results.filter((r) => r.ok).map((r) => r.rid));
+      for (const id of succeeded) autoApproved.current.add(id);
+      if (succeeded.size) setRows((prev) => prev.filter((r) => !succeeded.has(r.id)));
+    })();
+  }, [approvedMap, rows]);
 
   function makeKeys(r: PendingRow) {
     const venueLabel = r.venues?.name || "Unknown venue";
