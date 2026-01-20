@@ -26,9 +26,20 @@ declare namespace google {
       setContent(html: string): void;
       open(opts: any): void;
     }
+    class Marker {
+      constructor(opts?: any);
+      setMap(map: Map | null): void;
+      setPosition(pos: LatLng | LatLngLiteral): void;
+      addListener(ev: string, cb: () => void): void;
+      setZIndex(z: number): void;
+      static MAX_ZINDEX: number;
+    }
     class Circle {
       constructor(opts?: any);
       getBounds(): LatLngBounds | null;
+    }
+    class Geocoder {
+      geocode(request: any): Promise<{ results: any[]; status?: string }>;
     }
     namespace marker {
       class PinElement {
@@ -53,8 +64,21 @@ declare namespace google {
         setBounds(bounds?: any): void;
         setOptions(opts: any): void;
       }
+      class PlaceAutocompleteElement extends HTMLElement {
+        value?: string;
+        placeholder?: string;
+        autocompleteOptions?: any;
+        addEventListener(type: string, listener: (ev: any) => void): void;
+      }
     }
   }
 }
 
 declare var google: any;
+
+// Allow using the web component tag in TSX without type errors
+declare namespace JSX {
+  interface IntrinsicElements {
+    'gmp-place-autocomplete': any;
+  }
+}

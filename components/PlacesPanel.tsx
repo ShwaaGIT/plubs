@@ -1,6 +1,6 @@
 "use client";
 import { Place } from "@/components/MapView";
-import LocationPicker from "@/components/LocationPicker";
+import SuburbSearch, { SuburbSelection } from "@/components/SuburbSearch";
 
 type Props = {
   center: { lat: number; lng: number };
@@ -23,7 +23,10 @@ export default function PlacesPanel(props: Props) {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <LocationPicker onCenterChange={props.onCenterChange} />
+        <SuburbSearch
+          onSelect={(s: SuburbSelection) => props.onCenterChange({ lat: s.lat, lng: s.lng })}
+          onClear={() => undefined}
+        />
       </div>
 
       <div style={{ fontSize: 12, color: "#8a94a6", marginBottom: 8 }}>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Place } from "@/components/MapView";
+import SuburbSearch, { SuburbSelection } from "@/components/SuburbSearch";
 import AdminMenu from "@/components/AdminMenu";
 import AddPriceModal from "@/components/AddPriceModal";
 import PriceFilterMenu, { Selection } from "@/components/PriceFilterMenu";
@@ -24,6 +25,7 @@ export default function Page() {
   const [placePrices, setPlacePrices] = useState<Record<string, number>>({});
   const [addPriceOpen, setAddPriceOpen] = useState(false);
   const [selection, setSelection] = useState<Selection>({ category: "beer", product_name: null, size_label: "Schooner", ml: null, membership: "non-member" });
+  const [suburbSel, setSuburbSel] = useState<SuburbSelection | null>(null);
   const selectedPlace = useMemo(() => places.find((p) => p.place_id === selectedPlaceId) || null, [places, selectedPlaceId]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +147,24 @@ export default function Page() {
 
   return (
     <div style={{ position: "fixed", inset: 0 }}>
+      {/* Suburb search (top-center) */}
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 20,
+        }}
+      >
+        <SuburbSearch
+          onSelect={(s) => {
+            setSuburbSel(s);
+            setCenter({ lat: s.lat, lng: s.lng });
+          }}
+          onClear={() => setSuburbSel(null)}
+        />
+      </div>
       <PriceFilterMenu
         value={selection}
         onChange={(sel) => {
@@ -179,6 +199,7 @@ export default function Page() {
         selectedPlaceId={selectedPlaceId}
         labelCategory={selection.category}
         userLocation={userLocation || undefined}
+        suburbSelection={suburbSel}
         onCenterChanged={(c) => setCenter(c)}
         onViewportChanged={handleViewportChanged}
         onMarkerClick={(id) => setSelectedPlaceId(id)}

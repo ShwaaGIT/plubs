@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { loadGoogleMaps, getOptionalMapId } from "../lib/googleMapsLoader";
 
 function verticalEllipsisSvg() {
   return `
@@ -28,6 +29,7 @@ type Props = {
   selectedPlaceId: string | null;
   userLocation?: { lat: number; lng: number };
   labelCategory?: "beer" | "wine" | "spirits";
+  suburbSelection?: { suburbName: string; placeId: string; lat: number; lng: number } | null;
   onCenterChanged?: (center: { lat: number; lng: number }) => void;
   onViewportChanged?: (v: {
     center: { lat: number; lng: number };
@@ -38,57 +40,45 @@ type Props = {
   onPlaceOptions?: (placeId: string) => void;
 };
 
-declare global {
-  interface Window {
-    _gmapsLoader?: Promise<void>;
-  }
-}
-
-export default function MapView({ center, places, selectedPlaceId, userLocation, labelCategory = "beer", onCenterChanged, onViewportChanged, onMarkerClick, onPlaceOptions }: Props) {
+export default function MapView({ center, places, selectedPlaceId, userLocation, labelCategory = "beer", suburbSelection, onCenterChanged, onViewportChanged, onMarkerClick, onPlaceOptions }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
+  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
-  const userMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
+  const userMarkerRef = useRef<google.maps.Marker | null>(null);
+  const suburbMarkerRef = useRef<google.maps.Marker | null>(null);
+  const [mapsError, setMapsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function ensureMaps() {
-      if (window._gmapsLoader) return window._gmapsLoader;
-      window._gmapsLoader = new Promise<void>((resolve, reject) => {
-        const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-        if (!key) {
-          console.error("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set");
-        }
-        const params = new URLSearchParams({
-          key: key || "",
-          v: "weekly",
-          libraries: "marker,places",
-        });
-        const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
-        if (mapId) params.set("map_ids", mapId);
-        const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Failed to load Google Maps JS API"));
-        document.head.appendChild(script);
-      });
-      return window._gmapsLoader;
-    }
-
-    ensureMaps().then(() => {
+    loadGoogleMaps().then(() => {
       if (cancelled) return;
       if (!containerRef.current) return;
+      if (!(window as any).google?.maps || !(window as any).google?.maps?.places) {
+        try {
+          console.warn("[Maps] Availability check:", {
+            mapsLoaded: Boolean((window as any).google?.maps),
+            placesAvailable: Boolean((window as any).google?.maps?.places),
+          });
+        } catch {}
+        setMapsError(
+          "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
+        );
+        return;
+      } else {
+        setMapsError(null);
+      }
       if (!mapRef.current) {
-        mapRef.current = new google.maps.Map(containerRef.current, {
+        const mapOptions: any = {
           center: { lat: center.lat, lng: center.lng },
           zoom: 14,
-          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
           gestureHandling: "greedy",
           clickableIcons: false,
           disableDefaultUI: true,
-        });
+        };
+        const mapId = getOptionalMapId();
+        if (mapId) mapOptions.mapId = mapId;
+        mapRef.current = new google.maps.Map(containerRef.current, mapOptions);
 
         infoRef.current = new google.maps.InfoWindow();
 
@@ -123,35 +113,56 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     }
   }, [center.lat, center.lng]);
 
+  // Suburb selection: pan/zoom and show a dedicated marker.
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const sel = suburbSelection;
+    if (!sel) {
+      if (suburbMarkerRef.current) {
+        suburbMarkerRef.current.setMap(null);
+        suburbMarkerRef.current = null;
+      }
+      return;
+    }
+    // Ensure marker exists
+    if (!suburbMarkerRef.current) {
+      suburbMarkerRef.current = new google.maps.Marker({
+        position: { lat: sel.lat, lng: sel.lng },
+        map,
+        title: sel.suburbName,
+      });
+    } else {
+      suburbMarkerRef.current.setPosition({ lat: sel.lat, lng: sel.lng } as any);
+      suburbMarkerRef.current.setMap(map);
+    }
+    // Pan and zoom to suburb
+    try {
+      map.panTo({ lat: sel.lat, lng: sel.lng } as any);
+      map.setZoom?.(13);
+    } catch {}
+  }, [suburbSelection?.lat, suburbSelection?.lng]);
+
   // Render or update user's location dot
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
     if (!userLocation) {
       if (userMarkerRef.current) {
-        userMarkerRef.current.map = null;
+        userMarkerRef.current.setMap(null);
         userMarkerRef.current = null;
       }
       return;
     }
     if (!userMarkerRef.current) {
-      const el = document.createElement("div");
-      el.style.width = "14px";
-      el.style.height = "14px";
-      el.style.borderRadius = "50%";
-      el.style.background = "#1a73e8"; // blue dot
-      el.style.boxShadow = "0 0 0 4px rgba(26,115,232,0.25), 0 1px 4px rgba(0,0,0,0.3)";
-      el.setAttribute("aria-label", "My location");
-      userMarkerRef.current = new google.maps.marker.AdvancedMarkerElement({
+      userMarkerRef.current = new google.maps.Marker({
         position: userLocation,
         map,
-        content: el,
         title: "You are here",
-        zIndex: 9999,
       });
     } else {
-      userMarkerRef.current.position = userLocation as any;
-      userMarkerRef.current.map = map;
+      userMarkerRef.current.setPosition(userLocation as any);
+      userMarkerRef.current.setMap(map);
     }
   }, [userLocation?.lat, userLocation?.lng]);
 
@@ -163,7 +174,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     // Remove markers that no longer exist
     markersRef.current.forEach((marker, id) => {
       if (!places.find((p) => p.place_id === id)) {
-        marker.map = null;
+        marker.setMap(null);
         markersRef.current.delete(id);
       }
     });
@@ -171,29 +182,12 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     // Add or update markers
     places.forEach((p) => {
       if (!markersRef.current.has(p.place_id)) {
-        // Custom beer icon marker with optional price
-        const el = document.createElement("div");
-        el.style.display = "inline-flex";
-        el.style.alignItems = "center";
-        el.style.gap = "4px";
-        el.style.minWidth = "28px";
-        el.style.height = "28px";
-        el.style.padding = "0 6px";
-        el.style.borderRadius = "14px";
-        el.style.background = "#ffffff";
-        el.style.border = "2px solid #d29922";
-        el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.35), 0 0 0 4px rgba(210,153,34,0.18)";
-        el.style.fontSize = "16px";
-        el.style.lineHeight = "1";
-        el.style.userSelect = "none";
-        el.setAttribute("aria-label", `Pub: ${p.name}`);
-        el.innerHTML = markerLabelHtml(p.price_cents, labelCategory);
-
-        const marker = new google.maps.marker.AdvancedMarkerElement({
+        const marker = new google.maps.Marker({
           position: { lat: p.lat, lng: p.lng },
           map,
           title: p.name,
-          content: el,
+          icon: makeWhiteDotIcon(),
+          label: makeMarkerLabel(p.price_cents),
         });
         marker.addListener("click", () => {
           if (onMarkerClick) onMarkerClick(p.place_id);
@@ -226,38 +220,86 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
         markersRef.current.set(p.place_id, marker);
       } else {
         const m = markersRef.current.get(p.place_id)!;
-        m.position = { lat: p.lat, lng: p.lng } as any;
-        const el = m.content as HTMLElement | null;
-        if (el) el.innerHTML = markerLabelHtml(p.price_cents, labelCategory);
+        m.setPosition({ lat: p.lat, lng: p.lng } as any);
+        try {
+          m.setIcon(makeWhiteDotIcon());
+          m.setLabel(makeMarkerLabel(p.price_cents));
+        } catch {}
       }
     });
   }, [places, labelCategory]);
 
-  // Highlight selection
+  // Highlight selection (bring selected marker above others)
   useEffect(() => {
     markersRef.current.forEach((marker, id) => {
-      const el = marker.content as HTMLElement | null;
-      if (!el) return;
       if (selectedPlaceId === id) {
-        el.style.transform = "scale(1.2)";
-        el.style.filter = "drop-shadow(0 0 6px rgba(62,166,255,0.9))";
+        try {
+          marker.setZIndex((google as any).maps?.Marker?.MAX_ZINDEX ? (google as any).maps.Marker.MAX_ZINDEX + 1 : 1000);
+        } catch {
+          marker.setZIndex(1000 as any);
+        }
       } else {
-        el.style.transform = "scale(1.0)";
-        el.style.filter = "none";
+        marker.setZIndex(0 as any);
       }
     });
     // intentionally not auto-panning to the selected marker to avoid map bounce
   }, [selectedPlaceId]);
 
-  return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />;
+  return (
+    <>
+      <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+      {mapsError ? (
+        <div
+          role="alert"
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            right: 12,
+            zIndex: 10000,
+            background: "#fee2e2",
+            color: "#991b1b",
+            border: "1px solid #fecaca",
+            borderRadius: 8,
+            padding: "8px 10px",
+            maxWidth: 560,
+            boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+          }}
+        >
+          {mapsError}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
-function markerLabelHtml(price_cents?: number, cat: "beer" | "wine" | "spirits" = "beer") {
+// Marker label: beer emoji + approved price (if present)
+function makeMarkerLabel(price_cents?: number): google.maps.MarkerLabel {
   const have = typeof price_cents === "number" && isFinite(price_cents) && price_cents > 0;
-  const price = have ? `$${formatCents(price_cents!)}` : "";
-  // Using simple HTML; values derived from numbers only
-  const icon = cat === "wine" ? "🍷" : cat === "spirits" ? "🥃" : "🍺";
-  return `<span aria-hidden="true">${icon}</span>${have ? `<span style=\"font-weight:600;font-size:14px;color:#1f2937\">${price}</span>` : ""}`;
+  const text = have ? `🍺 $${formatCents(price_cents)}` : "🍺";
+  return {
+    text,
+    color: "#1f2937",
+    fontSize: "14px",
+    fontWeight: "600",
+  } as google.maps.MarkerLabel;
+}
+
+// Small white dot icon with label origin to the right
+function makeWhiteDotIcon(): google.maps.Icon {
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
+  <circle cx="7" cy="7" r="5.5" fill="#ffffff" stroke="#9ca3af" stroke-width="1" />
+  <circle cx="7" cy="7" r="2" fill="#9ca3af" opacity="0.15" />
+</svg>`;
+  const url = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+  // Label rendered to the right-middle of the dot
+  return {
+    url,
+    scaledSize: new google.maps.Size(14, 14),
+    anchor: new google.maps.Point(7, 7),
+    labelOrigin: new google.maps.Point(20, 8),
+  } as google.maps.Icon;
 }
 
 function formatCents(cents: number): string {
