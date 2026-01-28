@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -11,6 +11,8 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const search = useSearchParams();
+  const nextDest = search?.get("next") || "/";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +29,7 @@ export default function SignupPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Signup failed");
-      router.push("/");
+      router.push(nextDest);
       router.refresh();
     } catch (e: any) {
       setError(e?.message || "Signup failed");
@@ -60,38 +62,8 @@ export default function SignupPage() {
         <button type="submit" disabled={loading}>{loading ? "Creating…" : "Create account"}</button>
       </form>
       <p style={{ marginTop: 12 }}>
-        Already have an account? <a href="/login">Log in</a>
+        Already have an account? <a href={`/login?next=${encodeURIComponent(nextDest)}`}>Log in</a>
       </p>
-      <hr style={{ margin: "16px 0" }} />
-      <GuestButton />
-    </div>
-  );
-}
-
-function GuestButton() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-
-  async function goGuest() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/auth/guest", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to start guest session");
-      router.push("/");
-      router.refresh();
-    } catch (e: any) {
-      setError(e?.message || "Failed to start guest session");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      {error ? <div style={{ color: "crimson" }}>{error}</div> : null}
-      <button onClick={goGuest} disabled={loading}>{loading ? "Entering as guest…" : "Continue as guest"}</button>
     </div>
   );
 }

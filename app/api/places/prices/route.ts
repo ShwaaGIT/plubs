@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     // Build select with joins so we can filter on products/sizes
     const inList = ids.map((s) => s.replace(/[,()]/g, "")).join(",");
-    const select = "price_cents,created_at,venues(place_id:google_place_id),product_sizes(size_label,ml,products(name,category,mixer))";
+    const select = "price_cents,membership,created_at,venues(place_id:google_place_id),product_sizes(size_label,ml,products(name,category,mixer))";
     const base = new URLSearchParams();
     base.set("select", select);
     base.set("status", "eq.approved");
@@ -36,31 +36,56 @@ export async function POST(req: Request) {
     if (filter?.mixer) path += `&product_sizes.products.mixer=eq.${encodeURIComponent(filter.mixer)}`;
     if (filter?.size_label) path += `&product_sizes.size_label=eq.${encodeURIComponent(filter.size_label)}`;
     if (typeof filter?.ml === "number") path += `&product_sizes.ml=eq.${filter.ml}`;
-    if (typeof filter?.membership === "boolean") {
-      if (filter.membership) {
-        path += `&membership=is.true`;
-      } else {
-        // Treat missing membership as non-member for backward compatibility
-        path += `&or=(membership.is.false,membership.is.null)`;
-      }
+    // For membership=true we will fetch both member and non-member, then prefer member in-memory.
+    // For membership=false we restrict to non-member (or null) as before.
+    const wantMember = typeof filter?.membership === "boolean" ? filter.membership : undefined;
+    if (wantMember === false) {
+      // Treat missing membership as non-member for backward compatibility
+      path += `&or=(membership.is.false,membership.is.null)`;
     }
 
     const rows = (await sbJson(path)) as Array<{
       price_cents: number;
+      membership: boolean | null;
       created_at: string;
       venues: { place_id: string } | null;
       product_sizes?: { size_label?: string | null; ml?: number | null; products?: { name?: string | null; category?: string | null; mixer?: string | null } | null } | null;
     }>;
 
-    const seen = new Set<string>();
-    const out: { place_id: string; price_cents: number }[] = [];
-    for (const r of rows) {
-      const pid = r.venues?.place_id;
-      if (!pid || seen.has(pid)) continue;
-      seen.add(pid);
-      out.push({ place_id: pid, price_cents: r.price_cents });
+    // If members requested, prefer member price if any exist; otherwise fall back to latest non-member.
+    if (wantMember === true) {
+      const pick: { place_id: string; price_cents: number }[] = [];
+      const chosen = new Set<string>();
+      // First, take most recent member prices
+      for (const r of rows as Array<{ price_cents: number; membership: boolean | null; venues: { place_id: string } | null }>) {
+        const pid = r.venues?.place_id;
+        if (!pid || chosen.has(pid)) continue;
+        if (r.membership === true) {
+          // Prefer the first member price encountered (most recent)
+          pick.push({ place_id: pid, price_cents: r.price_cents });
+          chosen.add(pid);
+        }
+      }
+      // Fallback to most recent any price for places without member prices
+      for (const r of rows as Array<{ price_cents: number; venues: { place_id: string } | null }>) {
+        const pid = r.venues?.place_id;
+        if (!pid || chosen.has(pid)) continue;
+        pick.push({ place_id: pid, price_cents: r.price_cents });
+        chosen.add(pid);
+      }
+      return NextResponse.json({ results: pick }, { status: 200 });
+    } else {
+      // Non-member (or no membership preference): return the most recent per place from the filtered rows
+      const seen = new Set<string>();
+      const out: { place_id: string; price_cents: number }[] = [];
+      for (const r of rows) {
+        const pid = r.venues?.place_id;
+        if (!pid || seen.has(pid)) continue;
+        seen.add(pid);
+        out.push({ place_id: pid, price_cents: r.price_cents });
+      }
+      return NextResponse.json({ results: out }, { status: 200 });
     }
-    return NextResponse.json({ results: out }, { status: 200 });
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "Failed to load prices";
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -6,7 +6,6 @@ type User = { id: string; email: string; name?: string | null; display_name?: st
 
 export default function AuthStatus() {
   const [user, setUser] = useState<User>(null);
-  const [guest, setGuest] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,9 +16,6 @@ export default function AuthStatus() {
         const data = await res.json();
         if (!active) return;
         setUser(data.user || null);
-        // Detect guest cookie client-side
-        const isGuest = /(?:^|; )plubs_guest=1(?:;|$)/.test(document.cookie);
-        setGuest(isGuest);
       } finally {
         if (active) setLoading(false);
       }
@@ -31,41 +27,47 @@ export default function AuthStatus() {
 
   if (loading) return null;
 
-  if (!user && !guest) {
+  const baseBtn: React.CSSProperties = {
+    display: "inline-block",
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "1px solid transparent",
+    textDecoration: "none",
+    cursor: "pointer",
+    fontSize: 12,
+  };
+  const btnPrimary: React.CSSProperties = {
+    ...baseBtn,
+    background: "#ff3b30",
+    color: "#ffffff",
+    boxShadow: "0 4px 10px rgba(255,59,48,0.2)",
+  };
+  const btnSecondary: React.CSSProperties = {
+    ...baseBtn,
+    background: "#ffffff",
+    color: "#111827",
+    border: "1px solid #ff3b30",
+  };
+
+  if (!user) {
     return (
-      <div style={{ display: "flex", gap: 12 }}>
-        <a href="/login">Log in</a>
-        <a href="/signup">Sign up</a>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <a href="/login" style={btnPrimary}>Log in</a>
+        <a href="/signup" style={btnSecondary}>Sign up</a>
       </div>
     );
   }
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    // Also clear guest cookie if present
-    document.cookie = `plubs_guest=; Expires=${new Date(0).toUTCString()}; Path=/; SameSite=Lax`;
     location.reload();
-  }
-
-  if (guest && !user) {
-    const leaveGuest = () => {
-      document.cookie = `plubs_guest=; Expires=${new Date(0).toUTCString()}; Path=/; SameSite=Lax`;
-      location.href = "/welcome";
-    };
-    return (
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <span>Guest</span>
-        <a href="/login">Sign in</a>
-        <button onClick={leaveGuest}>Exit guest</button>
-      </div>
-    );
   }
 
   const label = user?.display_name || user?.name || user?.email;
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-      <span>{label}</span>
-      <button onClick={logout}>Log out</button>
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <span style={{ color: "#374151", fontSize: 12 }}>{label}</span>
+      <button onClick={logout} style={btnSecondary}>Log out</button>
     </div>
   );
 }

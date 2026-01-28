@@ -99,15 +99,15 @@ export default function AdminMenu({ onApproved }: Props) {
         title="Admin approvals"
         style={{
           position: "fixed",
-          top: 8,
+          top: 64,
           right: 12,
-          zIndex: 20,
+          zIndex: 10003,
           background: "#ffffff",
           color: "#111827",
-          border: "1px solid #e5e7eb",
+          border: "1px solid #ff3b30",
           borderRadius: 6,
           padding: "6px 10px",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+          boxShadow: "0 2px 6px rgba(255,59,48,0.15)",
           cursor: "pointer",
         }}
       >

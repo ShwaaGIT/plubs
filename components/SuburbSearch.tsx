@@ -124,11 +124,11 @@ const inputStyle: React.CSSProperties = {
   height: 40,
   padding: "8px 30px 8px 12px",
   borderRadius: 9999,
-  border: "1px solid #e5e7eb",
+  border: "1px solid #ff3b30",
   background: "#ffffff",
   color: "#111827",
   outline: "none",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+  boxShadow: "0 2px 10px rgba(255,59,48,0.15)",
 };
 
 const clearBtnStyle: React.CSSProperties = {
@@ -138,9 +138,9 @@ const clearBtnStyle: React.CSSProperties = {
   width: 28,
   height: 28,
   borderRadius: 14,
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
-  color: "#111827",
+  border: "1px solid #ff3b30",
+  background: "#fff5f5",
+  color: "#b91c1c",
   cursor: "pointer",
   display: "grid",
   placeItems: "center",
@@ -151,7 +151,7 @@ const loadingStyle: React.CSSProperties = {
   position: "absolute",
   right: 40,
   top: 10,
-  color: "#6b7280",
+  color: "#ff3b30",
   fontSize: 16,
 };
 

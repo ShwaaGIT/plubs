@@ -136,10 +136,16 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
       suburbMarkerRef.current.setPosition({ lat: sel.lat, lng: sel.lng } as any);
       suburbMarkerRef.current.setMap(map);
     }
-    // Pan and zoom to suburb
+    // Pan to suburb without forcing a zoom out
     try {
       map.panTo({ lat: sel.lat, lng: sel.lng } as any);
-      map.setZoom?.(13);
+      // If current zoom is below a sensible minimum, zoom in; otherwise preserve zoom
+      try {
+        const currentZoom = map.getZoom?.();
+        if (typeof currentZoom === "number" && isFinite(currentZoom)) {
+          if (currentZoom < 13) map.setZoom?.(13);
+        }
+      } catch {}
     } catch {}
   }, [suburbSelection?.lat, suburbSelection?.lng]);
 
@@ -186,8 +192,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
           position: { lat: p.lat, lng: p.lng },
           map,
           title: p.name,
-          icon: makeWhiteDotIcon(),
-          label: makeMarkerLabel(p.price_cents),
+          icon: makePriceBubbleIcon(p.price_cents),
         });
         marker.addListener("click", () => {
           if (onMarkerClick) onMarkerClick(p.place_id);
@@ -222,8 +227,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
         const m = markersRef.current.get(p.place_id)!;
         m.setPosition({ lat: p.lat, lng: p.lng } as any);
         try {
-          m.setIcon(makeWhiteDotIcon());
-          m.setLabel(makeMarkerLabel(p.price_cents));
+          (m as any).setIcon(makePriceBubbleIcon(p.price_cents));
         } catch {}
       }
     });
@@ -273,33 +277,62 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
   );
 }
 
-// Marker label: beer emoji + approved price (if present)
-function makeMarkerLabel(price_cents?: number): google.maps.MarkerLabel {
+// Marker icon: larger beer emoji in white rounded container with price or '?'
+function makePriceBubbleIcon(price_cents?: number): any {
   const have = typeof price_cents === "number" && isFinite(price_cents) && price_cents > 0;
-  const text = have ? `🍺 $${formatCents(price_cents)}` : "🍺";
-  return {
-    text,
-    color: "#1f2937",
-    fontSize: "14px",
-    fontWeight: "600",
-  } as google.maps.MarkerLabel;
-}
+  const priceText = have ? `$${formatCents(price_cents!)}` : "?";
 
-// Small white dot icon with label origin to the right
-function makeWhiteDotIcon(): google.maps.Icon {
+  // Layout metrics (in CSS pixels)
+  const padX = 8; // horizontal padding inside bubble
+  const padY = 6; // vertical padding inside bubble
+  const gap = 6;  // space between emoji and text
+  const emojiSize = 18; // larger beer symbol
+  const textSize = 14;  // price text size
+  const pointerH = 6;   // height of the bottom pointer
+  const pointerW = 10;  // width of the pointer base
+
+  // Approximate text width (SVG can't easily measure ahead of time). Use ~8px per char as a heuristic.
+  const approxCharW = 8;
+  const textW = priceText.length * approxCharW;
+  const emojiW = emojiSize; // emoji roughly square
+
+  const innerW = emojiW + (priceText ? gap + textW : 0);
+  const w = Math.max(emojiW + padX * 2, innerW + padX * 2);
+  const h = emojiSize + padY * 2; // bubble height without pointer
+  const totalH = h + pointerH;    // total including pointer
+
+  const r = 8; // corner radius
+
+  const emojiX = padX;
+  const emojiY = padY + emojiSize * 0.82; // baseline tweak for emoji
+  const textX = emojiX + emojiW + gap;
+  const textY = padY + textSize; // baseline for price text
+
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
-  <circle cx="7" cy="7" r="5.5" fill="#ffffff" stroke="#9ca3af" stroke-width="1" />
-  <circle cx="7" cy="7" r="2" fill="#9ca3af" opacity="0.15" />
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${totalH}" viewBox="0 0 ${w} ${totalH}">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feOffset dx="0" dy="1"/>
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0   0 0 0 0.18 0"/>
+      <feBlend in2="SourceGraphic" mode="normal"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <path d="M ${r} 0 H ${w - r} A ${r} ${r} 0 0 1 ${w} ${r} V ${h - r} A ${r} ${r} 0 0 1 ${w - r} ${h} H ${(w + pointerW) / 2} L ${w / 2} ${totalH} L ${(w - pointerW) / 2} ${h} H ${r} A ${r} ${r} 0 0 1 0 ${h - r} V ${r} A ${r} ${r} 0 0 1 ${r} 0 Z" fill="#ffffff" stroke="#9ca3af" stroke-width="1" />
+    <text x="${emojiX}" y="${emojiY}" font-size="${emojiSize}px">🍺</text>
+    <text x="${textX}" y="${textY}" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="${textSize}px" font-weight="600" fill="#111827">${priceText}</text>
+  </g>
 </svg>`;
+
   const url = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
-  // Label rendered to the right-middle of the dot
+
   return {
     url,
-    scaledSize: new google.maps.Size(14, 14),
-    anchor: new google.maps.Point(7, 7),
-    labelOrigin: new google.maps.Point(20, 8),
-  } as google.maps.Icon;
+    // Use device pixel ratio to keep it crisp on retina
+    scaledSize: new (google as any).maps.Size(w, totalH),
+    anchor: new (google as any).maps.Point(w / 2, totalH), // bottom-center at the pointer tip
+  };
 }
 
 function formatCents(cents: number): string {

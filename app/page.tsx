@@ -5,6 +5,7 @@ import MapView, { Place } from "@/components/MapView";
 import SuburbSearch, { SuburbSelection } from "@/components/SuburbSearch";
 import AdminMenu from "@/components/AdminMenu";
 import AddPriceModal from "@/components/AddPriceModal";
+import PlaceAdminModal from "@/components/PlaceAdminModal";
 import PriceFilterMenu, { Selection } from "@/components/PriceFilterMenu";
 
 type SearchPayload = {
@@ -19,11 +20,14 @@ export default function Page() {
   // Always search for all categories now
   const filters = useMemo(() => ({ pubs: true, clubs: true, bars: true }), []);
   const [radius, setRadius] = useState<number>(1000);
+  const [user, setUser] = useState<any>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [placePrices, setPlacePrices] = useState<Record<string, number>>({});
   const [addPriceOpen, setAddPriceOpen] = useState(false);
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>({ category: "beer", product_name: null, size_label: "Schooner", ml: null, membership: "non-member" });
   const [suburbSel, setSuburbSel] = useState<SuburbSelection | null>(null);
   const selectedPlace = useMemo(() => places.find((p) => p.place_id === selectedPlaceId) || null, [places, selectedPlaceId]);
@@ -83,6 +87,26 @@ export default function Page() {
       setLoading(false);
     }
   }, [center.lat, center.lng, radius, filters, selection]);
+
+  // Detect user + admin to decide which modal to open from place options
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!active) return;
+        setUser(j?.user || null);
+        setIsAdmin(!!j?.user?.admin);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setUser(null);
+        setIsAdmin(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   // Geolocate and center on the user's location (track movement)
   useEffect(() => {
@@ -205,7 +229,14 @@ export default function Page() {
         onMarkerClick={(id) => setSelectedPlaceId(id)}
         onPlaceOptions={(id) => {
           setSelectedPlaceId(id);
-          setAddPriceOpen(true);
+          // If not signed in, bounce to login preserving return path
+          if (!user) {
+            const next = encodeURIComponent("/");
+            window.location.href = `/login?next=${next}`;
+            return;
+          }
+          if (isAdmin) setAdminModalOpen(true);
+          else setAddPriceOpen(true);
         }}
       />
       {/* Add price modal */}
@@ -215,6 +246,16 @@ export default function Page() {
           onClose={() => setAddPriceOpen(false)}
           onSubmitted={() => {
             // waits for admin approval to reflect on map
+          }}
+        />
+      )}
+      {/* Admin place modal */}
+      {selectedPlace && adminModalOpen && (
+        <PlaceAdminModal
+          place={selectedPlace}
+          onClose={() => setAdminModalOpen(false)}
+          onApproved={(price_cents) => {
+            setPlacePrices((prev) => ({ ...prev, [selectedPlace.place_id]: price_cents }));
           }}
         />
       )}

@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 
 // Cookie names used for gating
 const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME || "plubs_session";
-const GUEST_COOKIE = process.env.GUEST_COOKIE_NAME || "plubs_guest";
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -21,15 +20,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSession = Boolean(req.cookies.get(SESSION_COOKIE)?.value);
-  const isGuest = req.cookies.get(GUEST_COOKIE)?.value === "1";
-
-  if (!hasSession && !isGuest) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/welcome";
-    // preserve original destination to enable future return
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+  // Only protect admin pages; let guests browse the rest
+  if (pathname.startsWith("/admin")) {
+    const hasSession = Boolean(req.cookies.get(SESSION_COOKIE)?.value);
+    if (!hasSession) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
   }
 
   return NextResponse.next();
@@ -39,4 +38,3 @@ export const config = {
   // Apply to all paths except the allowlist above
   matcher: "/:path*",
 };
-

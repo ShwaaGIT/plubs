@@ -135,7 +135,9 @@ export default function PriceFilterMenu({ value, onChange }: Props) {
               aria-label="Show member prices"
               style={{ width: 16, height: 16 }}
             />
-            <span style={{ fontSize: 12, color: "#cbd5e1" }}>{membership === "member" ? "On" : "Off"}</span>
+            <span style={{ fontSize: 12, color: membership === "member" ? "#ff3b30" : "#6b7280" }}>
+              {membership === "member" ? "On" : "Off"}
+            </span>
           </div>
         </label>
 
@@ -232,19 +234,19 @@ function sizeToMl(label?: string | null): number | null {
 
 const wrap: React.CSSProperties = {
   position: "absolute",
-  right: 16,
+  left: 16,
   top: 16,
   zIndex: 12,
-  background: "#0f1318",
-  color: "#e5e7eb",
-  border: "1px solid #2a2e35",
+  background: "#ffffff",
+  color: "#111827",
+  border: "1px solid #ff3b30",
   borderRadius: 10,
-  boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+  boxShadow: "0 10px 30px rgba(255,59,48,0.15)",
   padding: 10,
   minWidth: 260,
 };
 const row: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 };
-const lbl: React.CSSProperties = { display: "grid", gap: 4, fontSize: 12, color: "#aab" };
-const inp: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: "1px solid #2a2e35", background: "#0b0f14", color: "#e5e7eb" };
-const segBtn: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: "1px solid #2a2e35", background: "#0b0f14", color: "#e5e7eb", cursor: "pointer" };
-const segBtnActive: React.CSSProperties = { background: "#111827", borderColor: "#475569" };
+const lbl: React.CSSProperties = { display: "grid", gap: 4, fontSize: 12, color: "#374151", fontWeight: 600 };
+const inp: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: "1px solid #ff3b30", background: "#ffffff", color: "#111827" };
+const segBtn: React.CSSProperties = { padding: "6px 8px", borderRadius: 6, border: "1px solid #ff3b30", background: "#ffffff", color: "#111827", cursor: "pointer" };
+const segBtnActive: React.CSSProperties = { background: "#ff3b30", color: "#ffffff", borderColor: "#ff3b30" };
