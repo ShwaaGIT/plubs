@@ -2,6 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 
+// Reusable chip style for price summary badges
+const chip: React.CSSProperties = {
+  display: "inline-block",
+  padding: "2px 8px",
+  borderRadius: 999,
+  border: "1px solid #2a2e35",
+  background: "#0f1318",
+  color: "#e8eaed",
+  fontSize: 12,
+  lineHeight: "18px",
+};
+
 type PendingRow = {
   id: string;
   price_cents: number;
@@ -286,16 +298,4 @@ const btnDanger: React.CSSProperties = {
   background: "#ef4444",
   color: "#140808",
   borderColor: "#dc2626",
-};
-
-// Reusable chip style for price summary badges
-const chip: React.CSSProperties = {
-  display: "inline-block",
-  padding: "2px 8px",
-  borderRadius: 999,
-  border: "1px solid #2a2e35",
-  background: "#0f1318",
-  color: "#e8eaed",
-  fontSize: 12,
-  lineHeight: "18px",
 };

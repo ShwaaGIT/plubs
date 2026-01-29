@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -10,7 +11,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const search = useSearchParams();
-  const nextDest = search?.get("next") || "/";
+  const nextParam = search?.get("next") || "/";
+  const nextDest = (nextParam && nextParam.startsWith("/")) ? (nextParam as Route) : ("/" as Route);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
