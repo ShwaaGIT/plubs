@@ -9,6 +9,8 @@ declare global {
 function buildScriptSrc(): string {
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
   const params = new URLSearchParams({ key, v: "weekly", libraries: "places" });
+  // Follow best-practice loading pattern to avoid console warning
+  params.set("loading", "async");
   const rawMapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || "";
   const mapId = rawMapId && rawMapId !== "YOUR_GOOGLE_MAPS_MAP_ID" ? rawMapId : "";
   // Runtime diagnostics (do not log the key)
