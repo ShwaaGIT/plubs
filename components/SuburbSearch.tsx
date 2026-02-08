@@ -17,10 +17,12 @@ type Props = {
 
 export default function SuburbSearch({ onSelect, onClear, placeholder = "Search suburb (AU)" }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const autoElMountRef = useRef<HTMLDivElement | null>(null);
   const [value, setValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const autoElementRef = useRef<any | null>(null);
 
   useEffect(() => {
     let destroyed = false;
@@ -28,12 +30,88 @@ export default function SuburbSearch({ onSelect, onClear, placeholder = "Search 
     loadGoogleMaps().then(() => {
       if (destroyed) return;
       const el = inputRef.current;
-      if (!el) return;
-      if (!(window as any).google?.maps || !(window as any).google?.maps?.places) {
+      // If the new PlaceAutocompleteElement is available (new customers from Mar 2025), prefer it.
+      const gmaps = (window as any).google?.maps;
+      const placesNs = gmaps?.places;
+
+      // New element path
+      if (gmaps && placesNs && (placesNs as any).PlaceAutocompleteElement && autoElMountRef.current) {
+        try {
+          setError(null);
+          const mount = autoElMountRef.current;
+          // Avoid duplicates on re-render
+          if (!autoElementRef.current) {
+            const pae = new (placesNs as any).PlaceAutocompleteElement();
+            pae.placeholder = placeholder;
+            pae.style.cssText = `display:block;width:280px;height:40px;border-radius:9999px;border:1px solid #ff3b30;background:#ffffff;color:#111827;box-shadow:0 2px 10px rgba(255,59,48,0.15);padding:4px 8px;`;
+            // Restrict to AU regions roughly equivalent to legacy options
+            try {
+              pae.autocompleteOptions = {
+                componentRestrictions: { country: "au" },
+                types: ["(regions)"] as any,
+                fields: ["id", "displayName", "location", "types"] as any,
+              };
+            } catch {}
+
+            // Handle selection events (support both event names just in case)
+            const onSelect = (ev: any) => {
+              try {
+                setLoading(true);
+                const detail = ev?.detail || ev;
+                const place = detail?.place || detail?.value || pae?.value || null;
+                // Try to normalize data across variants
+                const name: string =
+                  place?.displayName?.text || place?.name || (typeof pae?.value === "string" ? pae.value : value) || "";
+                const id: string = place?.id || place?.place_id || "";
+                const loc = place?.location || place?.geometry?.location;
+                let lat: number | undefined;
+                let lng: number | undefined;
+                try {
+                  if (loc && typeof loc.lat === "function" && typeof loc.lng === "function") {
+                    lat = loc.lat();
+                    lng = loc.lng();
+                  } else if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") {
+                    lat = loc.lat;
+                    lng = loc.lng;
+                  } else if (loc?.latLng && typeof loc.latLng.lat === "function" && typeof loc.latLng.lng === "function") {
+                    lat = loc.latLng.lat();
+                    lng = loc.latLng.lng();
+                  }
+                } catch {}
+                if (typeof lat === "number" && typeof lng === "number") {
+                  const sel: SuburbSelection = { suburbName: name, placeId: id, lat, lng };
+                  setValue(sel.suburbName);
+                  onSelect(sel);
+                } else {
+                  setError("Selected place has no location");
+                }
+              } finally {
+                setLoading(false);
+              }
+            };
+
+            try { pae.addEventListener("gmp-placeselect", onSelect); } catch {}
+            try { pae.addEventListener("gmpx-placechange", onSelect as any); } catch {}
+
+            mount.innerHTML = "";
+            mount.appendChild(pae);
+            autoElementRef.current = pae;
+          }
+        } catch (e: any) {
+          setError(
+            e?.message ||
+              "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
+          );
+        }
+        return;
+      }
+
+      // Legacy Autocomplete path
+      if (!gmaps || !placesNs || !el) {
         try {
           console.warn("[Maps] Availability check:", {
-            mapsLoaded: Boolean((window as any).google?.maps),
-            placesAvailable: Boolean((window as any).google?.maps?.places),
+            mapsLoaded: Boolean(gmaps),
+            placesAvailable: Boolean(placesNs),
           });
         } catch {}
         setError(
@@ -83,14 +161,19 @@ export default function SuburbSearch({ onSelect, onClear, placeholder = "Search 
 
   return (
     <div style={wrapStyle}>
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
-        aria-label="Search suburb"
-        style={inputStyle}
-      />
+      {/* Mount point for new PlaceAutocompleteElement; hidden when using legacy input */}
+      <div ref={autoElMountRef} style={{ display: "block" }} />
+      {/* Legacy fallback input (visible when new element not attached) */}
+      {!autoElementRef.current ? (
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          aria-label="Search suburb"
+          style={inputStyle}
+        />
+      ) : null}
       {value ? (
         <button
           type="button"
@@ -100,6 +183,7 @@ export default function SuburbSearch({ onSelect, onClear, placeholder = "Search 
             setValue("");
             try {
               if (inputRef.current) inputRef.current.value = "";
+              if (autoElementRef.current) autoElementRef.current.value = "";
             } catch {}
             onClear?.();
           }}

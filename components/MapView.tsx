@@ -54,17 +54,22 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     loadGoogleMaps().then(() => {
       if (cancelled) return;
       if (!containerRef.current) return;
-      if (!(window as any).google?.maps || !(window as any).google?.maps?.places) {
+      const mapsPresent = Boolean((window as any).google?.maps);
+      const placesPresent = Boolean((window as any).google?.maps?.places);
+      if (!mapsPresent) {
+        setMapsError("Google Maps JavaScript failed to load.");
+        return;
+      }
+      if (!placesPresent) {
         try {
           console.warn("[Maps] Availability check:", {
-            mapsLoaded: Boolean((window as any).google?.maps),
-            placesAvailable: Boolean((window as any).google?.maps?.places),
+            mapsLoaded: mapsPresent,
+            placesAvailable: placesPresent,
           });
         } catch {}
         setMapsError(
-          "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
+          "Places library unavailable. Map will render, but suburb search and some features are limited."
         );
-        return;
       } else {
         setMapsError(null);
       }
