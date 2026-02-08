@@ -50,31 +50,136 @@ function SignupContent() {
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: "64px auto", padding: 16 }}>
-      <h1>Sign up</h1>
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <label>
-          <div>Username</div>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} required style={{ width: "100%" }} />
-        </label>
-        <label>
-          <div>Email</div>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ width: "100%" }} />
-        </label>
-        <label>
-          <div>Password</div>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} style={{ width: "100%" }} />
-        </label>
-        <label>
-          <div>Confirm password</div>
-          <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} style={{ width: "100%" }} />
-        </label>
-        {error ? <div style={{ color: "crimson" }}>{error}</div> : null}
-        <button type="submit" disabled={loading}>{loading ? "Creating…" : "Create account"}</button>
-      </form>
-      <p style={{ marginTop: 12 }}>
-        Already have an account? <a href={`/login?next=${encodeURIComponent(nextDest)}`}>Log in</a>
-      </p>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#ffffff",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <img src="/logo.svg" alt="Plubs Live" style={{ width: 120, height: "auto" }} />
+          <div style={{ fontSize: 14, letterSpacing: 0.4, color: "#9ca3af", marginTop: 8 }}>WELCOME TO</div>
+        </div>
+
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 14,
+            boxShadow: "0 8px 30px rgba(0,0,0,0.07)",
+            padding: 18,
+          }}
+        >
+          <h2 style={{ margin: "0 0 8px", fontSize: 20, color: "#111827" }}>Sign up</h2>
+          <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>Username</span>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder="yourname"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  outline: "none",
+                  background: "#ffffff",
+                  boxSizing: "border-box",
+                }}
+              />
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>Email</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="you@example.com"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  outline: "none",
+                  background: "#ffffff",
+                  boxSizing: "border-box",
+                }}
+              />
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>Password</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="••••••••"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  outline: "none",
+                  background: "#ffffff",
+                  boxSizing: "border-box",
+                }}
+              />
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>Confirm password</span>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="••••••••"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  outline: "none",
+                  background: "#ffffff",
+                  boxSizing: "border-box",
+                }}
+              />
+            </label>
+            {error ? (
+              <div style={{ color: "#b91c1c", fontSize: 13, background: "#fef2f2", border: "1px solid #fee2e2", padding: "8px 10px", borderRadius: 8 }}>{error}</div>
+            ) : null}
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                appearance: "none",
+                border: "none",
+                background: loading ? "#ff6b64" : "#ff3b30",
+                color: "#ffffff",
+                padding: "10px 14px",
+                borderRadius: 12,
+                cursor: "pointer",
+                fontWeight: 600,
+                transition: "filter .15s ease, transform .05s ease",
+              }}
+            >
+              {loading ? "Creating…" : "Create account"}
+            </button>
+          </form>
+        </div>
+        <p style={{ marginTop: 12, textAlign: "center", color: "#6b7280" }}>
+          Already have an account? <a href={`/login?next=${encodeURIComponent(nextDest)}`} style={{ color: "#111827", textDecoration: "none", borderBottom: "1px solid #ffd60a" }}>Log in</a>
+        </p>
+      </div>
     </div>
   );
 }

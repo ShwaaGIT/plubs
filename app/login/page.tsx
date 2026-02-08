@@ -87,6 +87,7 @@ function LoginContent() {
                   border: "1px solid #e5e7eb",
                   outline: "none",
                   background: "#ffffff",
+                  boxSizing: "border-box",
                 }}
               />
             </label>
@@ -105,6 +106,7 @@ function LoginContent() {
                   border: "1px solid #e5e7eb",
                   outline: "none",
                   background: "#ffffff",
+                  boxSizing: "border-box",
                 }}
               />
             </label>

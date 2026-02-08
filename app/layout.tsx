@@ -6,6 +6,7 @@ export const metadata = {
 import AuthStatus from "@/components/AuthStatus";
 import StartupKeyCheck from "@/components/StartupKeyCheck";
 import HomeButton from "@/components/HomeButton";
+import "./styles/global.css";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
