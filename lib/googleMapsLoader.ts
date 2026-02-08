@@ -48,7 +48,19 @@ export async function loadGoogleMaps(): Promise<void> {
         console.info("[Maps] google.maps loaded:", Boolean((window as any).google?.maps));
       } catch {}
       if (importLib) {
-        await Promise.all([importLib("maps"), importLib("places")]);
+        try {
+          await importLib("maps");
+        } catch (e) {
+          // If maps import fails, surface error so callers can handle
+          console.error("[Maps] Failed to import 'maps' library", e);
+          throw e;
+        }
+        try {
+          await importLib("places");
+        } catch (e) {
+          // Places might be unavailable for new customers; ignore but log
+          console.warn("[Maps] 'places' library not available or failed to import", e);
+        }
       }
       try {
         console.info("[Maps] google.maps.places available:", Boolean((window as any).google?.maps?.places));
