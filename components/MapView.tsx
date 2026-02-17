@@ -134,10 +134,11 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
 
         infoRef.current = new (infoWindowCtorRef.current)();
 
-        mapRef.current.addListener("idle", () => {
-          const c = mapRef.current!.getCenter();
-          const zoom = mapRef.current!.getZoom?.();
-          const b = mapRef.current!.getBounds?.();
+        const map = mapRef.current!; // locally capture to satisfy TS non-null
+        map.addListener("idle", () => {
+          const c = map.getCenter();
+          const zoom = map.getZoom?.();
+          const b = map.getBounds?.();
           const centerData = c ? { lat: c.lat(), lng: c.lng() } : undefined;
           if (centerData && onCenterChanged) onCenterChanged(centerData);
           if (centerData && onViewportChanged) {
