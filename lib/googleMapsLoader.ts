@@ -49,14 +49,26 @@ export async function loadGoogleMaps(): Promise<void> {
       } catch {}
       if (importLib) {
         try {
-          await importLib("maps");
+          const mapsModule = await importLib("maps");
+          // Attach module constructors back onto the global for legacy usage
+          try {
+            Object.assign((google as any).maps, mapsModule);
+          } catch {}
         } catch (e) {
-          // If maps import fails, surface error so callers can handle
+          // If maps import fails, log but DO NOT throw — fall back to global
+          // constructors if available so the map can still render.
           console.error("[Maps] Failed to import 'maps' library", e);
-          throw e;
         }
         try {
-          await importLib("places");
+          const placesModule = await importLib("places");
+          // Best-effort: ensure global namespace exposes places
+          try {
+            if (!(google as any).maps.places) {
+              (google as any).maps.places = placesModule;
+            } else {
+              Object.assign((google as any).maps.places, placesModule);
+            }
+          } catch {}
         } catch (e) {
           // Places might be unavailable for new customers; ignore but log
           console.warn("[Maps] 'places' library not available or failed to import", e);
@@ -68,6 +80,39 @@ export async function loadGoogleMaps(): Promise<void> {
     });
 
   return window.__gmapsLoaderPromise;
+}
+
+// Optionally expose the Places module even if the global namespace isn't populated.
+let __placesModule: any | null = null;
+
+export async function loadPlacesLibrary(): Promise<any | null> {
+  if (typeof window === "undefined") return null;
+  await loadGoogleMaps();
+  const gmaps: any = (window as any).google?.maps;
+  // If global namespace already has places, prefer it
+  if (gmaps?.places) return gmaps.places;
+  const importLib = gmaps?.importLibrary?.bind(gmaps);
+  if (!importLib) return null;
+  try {
+    if (!__placesModule) {
+      __placesModule = await importLib("places");
+      try {
+        console.info("[Maps] Places module loaded:", Boolean(__placesModule));
+      } catch {}
+      // Best-effort: attach to global for legacy code paths
+      try {
+        if (!(gmaps as any).places && __placesModule) {
+          (gmaps as any).places = __placesModule;
+        }
+      } catch {}
+    }
+    return __placesModule;
+  } catch (e) {
+    try {
+      console.warn("[Maps] Failed to import 'places' library", e);
+    } catch {}
+    return gmaps?.places || null;
+  }
 }
 
 export function getOptionalMapId(): string | undefined {

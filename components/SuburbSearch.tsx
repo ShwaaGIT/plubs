@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { loadGoogleMaps } from "../lib/googleMapsLoader";
+import { loadGoogleMaps, loadPlacesLibrary } from "../lib/googleMapsLoader";
 
 export type SuburbSelection = {
   suburbName: string;
@@ -23,22 +23,28 @@ export default function SuburbSearch({ onSelect, onClear, placeholder = "Search 
   const [error, setError] = useState<string | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const autoElementRef = useRef<any | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{ description: string; place_id: string }>>([]);
+  const [openSug, setOpenSug] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let destroyed = false;
 
+    // Load Maps core first, then Places via module (works even when global isn't populated)
     loadGoogleMaps().then(() => {
       if (destroyed) return;
       const el = inputRef.current;
-      // If the new PlaceAutocompleteElement is available (new customers from Mar 2025), prefer it.
       const gmaps = (window as any).google?.maps;
-      const placesNs = gmaps?.places;
+      // Try to ensure Places is present (module or global)
+      loadPlacesLibrary().then((placesModule) => {
+        if (destroyed) return;
+        const placesNs = placesModule || gmaps?.places;
 
-      // New element path
-      if (gmaps && placesNs && (placesNs as any).PlaceAutocompleteElement && autoElMountRef.current) {
-        try {
-          setError(null);
-          const mount = autoElMountRef.current;
+        // New element path
+        if (gmaps && placesNs && (placesNs as any).PlaceAutocompleteElement && autoElMountRef.current) {
+          try {
+            setError(null);
+            const mount = autoElMountRef.current;
           // Avoid duplicates on re-render
           if (!autoElementRef.current) {
             const pae = new (placesNs as any).PlaceAutocompleteElement();
@@ -103,59 +109,62 @@ export default function SuburbSearch({ onSelect, onClear, placeholder = "Search 
               "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
           );
         }
-        return;
-      }
+          return;
+        }
 
-      // Legacy Autocomplete path
-      if (!gmaps || !placesNs || !el) {
-        try {
-          console.warn("[Maps] Availability check:", {
-            mapsLoaded: Boolean(gmaps),
-            placesAvailable: Boolean(placesNs),
-          });
-        } catch {}
-        setError(
-          "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
-        );
-        return;
-      }
-      setError(null);
-      try {
-        const ac = new google.maps.places.Autocomplete(el, {
-          componentRestrictions: { country: "au" },
-          fields: ["place_id", "name", "geometry", "types"],
-          types: ["(regions)"] as any,
-        });
-        autocompleteRef.current = ac;
-        ac.addListener("place_changed", () => {
-          const place = ac.getPlace();
-          if (!place) return;
+        // Legacy Autocomplete path
+        if (!gmaps || !placesNs || !el) {
           try {
-            setLoading(true);
-            const name: string = (place as any).displayName?.text || place.name || value || "";
-            const id: string = place.place_id || "";
-            const loc = place.geometry?.location;
-            if (loc && typeof loc.lat === "function" && typeof loc.lng === "function") {
-              const sel: SuburbSelection = { suburbName: name, placeId: id, lat: loc.lat(), lng: loc.lng() };
-              setValue(sel.suburbName);
-              onSelect(sel);
-            } else {
-              setError("Selected place has no location");
+            console.warn("[Maps] Availability check:", {
+              mapsLoaded: Boolean(gmaps),
+              placesAvailable: Boolean(placesNs),
+            });
+          } catch {}
+          // Fall back to server-side autocomplete via API routes; keep legacy input visible
+          setError(null);
+          return;
+        }
+        setError(null);
+        try {
+          const acCtor: any = (placesNs as any).Autocomplete || (google as any)?.maps?.places?.Autocomplete;
+          if (!acCtor) throw new Error("Autocomplete class not available; use PlaceAutocompleteElement");
+          const ac = new acCtor(el, {
+            componentRestrictions: { country: "au" },
+            fields: ["place_id", "name", "geometry", "types"],
+            types: ["(regions)"] as any,
+          });
+          autocompleteRef.current = ac;
+          ac.addListener("place_changed", () => {
+            const place = ac.getPlace();
+            if (!place) return;
+            try {
+              setLoading(true);
+              const name: string = (place as any).displayName?.text || place.name || value || "";
+              const id: string = place.place_id || "";
+              const loc = place.geometry?.location;
+              if (loc && typeof loc.lat === "function" && typeof loc.lng === "function") {
+                const sel: SuburbSelection = { suburbName: name, placeId: id, lat: loc.lat(), lng: loc.lng() };
+                setValue(sel.suburbName);
+                onSelect(sel);
+              } else {
+                setError("Selected place has no location");
+              }
+            } finally {
+              setLoading(false);
             }
-          } finally {
-            setLoading(false);
-          }
-        });
-      } catch (e: any) {
-        setError(
-          e?.message ||
-            "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
-        );
-      }
+          });
+        } catch (e: any) {
+          setError(
+            e?.message ||
+              "Places API blocked. In Google Cloud, ensure this browser key is HTTP-referrer restricted for localhost + domain, and API-restricted to Maps JavaScript API + Places API, and that both APIs are enabled."
+          );
+        }
+      });
     });
 
     return () => {
       destroyed = true;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [onSelect]);
 
@@ -168,11 +177,89 @@ export default function SuburbSearch({ onSelect, onClear, placeholder = "Search 
         <input
           ref={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setValue(v);
+            // Use server-side autocomplete suggestions if client Places is unavailable
+            const hasClientPlaces = Boolean((window as any).google?.maps?.places);
+            if (!hasClientPlaces) {
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              debounceRef.current = setTimeout(async () => {
+                const q = v.trim();
+                if (!q) {
+                  setSuggestions([]);
+                  setOpenSug(false);
+                  return;
+                }
+                try {
+                  const r = await fetch("/api/places/autocomplete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: q }),
+                  });
+                  const j = await r.json();
+                  if (r.ok && Array.isArray(j?.predictions)) {
+                    setSuggestions(j.predictions);
+                    setOpenSug(true);
+                  } else {
+                    setSuggestions([]);
+                    setOpenSug(false);
+                  }
+                } catch {
+                  setSuggestions([]);
+                  setOpenSug(false);
+                }
+              }, 250);
+            }
+          }}
           placeholder={placeholder}
           aria-label="Search suburb"
           style={inputStyle}
         />
+      ) : null}
+      {/* Server-side suggestions dropdown */}
+      {!autoElementRef.current && openSug && suggestions.length ? (
+        <div style={sugWrapStyle} role="listbox">
+          {suggestions.map((sug) => (
+            <button
+              type="button"
+              key={sug.place_id}
+              role="option"
+              onClick={async () => {
+                setOpenSug(false);
+                setSuggestions([]);
+                setLoading(true);
+                try {
+                  const r = await fetch("/api/places/details", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ place_id: sug.place_id }),
+                  });
+                  const j = await r.json();
+                  if (r.ok && typeof j?.lat === "number" && typeof j?.lng === "number") {
+                    const sel: SuburbSelection = {
+                      suburbName: j?.name || sug.description,
+                      placeId: sug.place_id,
+                      lat: j.lat,
+                      lng: j.lng,
+                    };
+                    setValue(sel.suburbName);
+                    onSelect(sel);
+                  } else {
+                    setError(j?.error || "Failed to resolve place");
+                  }
+                } catch {
+                  setError("Failed to resolve place");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              style={sugItemStyle}
+            >
+              {sug.description}
+            </button>
+          ))}
+        </div>
       ) : null}
       {value ? (
         <button
@@ -251,4 +338,29 @@ const errorStyle: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: 12,
   boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+};
+
+const sugWrapStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 44,
+  left: 0,
+  width: 280,
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  boxShadow: "0 12px 24px rgba(0,0,0,0.12)",
+  zIndex: 50,
+  overflow: "hidden",
+};
+
+const sugItemStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "8px 10px",
+  background: "#ffffff",
+  color: "#111827",
+  border: "none",
+  borderBottom: "1px solid #f3f4f6",
+  cursor: "pointer",
 };

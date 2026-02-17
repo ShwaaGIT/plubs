@@ -7,6 +7,7 @@ import AdminMenu from "@/components/AdminMenu";
 import AddPriceModal from "@/components/AddPriceModal";
 import PlaceAdminModal from "@/components/PlaceAdminModal";
 import PriceFilterMenu, { Selection } from "@/components/PriceFilterMenu";
+import MapsDiagnostics from "@/components/MapsDiagnostics";
 
 type SearchPayload = {
   centerLat: number;
@@ -171,6 +172,8 @@ export default function Page() {
 
   return (
     <div style={{ position: "fixed", inset: 0 }}>
+      {/* Dev-only diagnostics for Google Maps/Places setup */}
+      {process.env.NODE_ENV !== "production" ? <MapsDiagnostics /> : null}
       {/* Suburb search (top-center) */}
       <div
         style={{

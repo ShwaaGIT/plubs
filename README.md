@@ -82,6 +82,19 @@ http://localhost:3000
 - To adjust the result limit or cache TTL, see `lib/googlePlaces.ts`.
 - Styling lives inline in components for simplicity; migrate to CSS Modules or Tailwind if preferred.
 
+## Troubleshooting Blank Map
+- Ensure your browser key (`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`) has HTTP referrer restrictions that include your dev host:
+  - `http://localhost:3000`, `http://127.0.0.1:3000`, and your production domain.
+- Restrict the key to APIs and include both:
+  - Maps JavaScript API
+  - Places API
+- Verify both APIs are enabled in the same Google Cloud project.
+- Disable ad/tracker blockers for your dev host — some block map tiles.
+- Use the in‑app “Maps Diagnostics” (dev only) to confirm:
+  - `google.maps loaded: true`
+  - `google.maps.places available: true` (optional but enables suburb search)
+- If `places` is unavailable, the map still renders; only autocomplete is limited.
+
 ---
 Happy mapping!
 

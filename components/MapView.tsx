@@ -48,16 +48,63 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
   const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const suburbMarkerRef = useRef<google.maps.Marker | null>(null);
   const [mapsError, setMapsError] = useState<string | null>(null);
+  // Keep constructors from the module import to avoid relying solely on globals
+  const mapCtorRef = useRef<any>(null);
+  const markerCtorRef = useRef<any>(null);
+  const infoWindowCtorRef = useRef<any>(null);
+  const eventNsRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadGoogleMaps().then(() => {
+    // Retry helper to tolerate slow attachment of constructors on the global/module
+    const resolveConstructors = async (tries: number): Promise<{
+      gmaps: any;
+      MapCtor: any;
+      MarkerCtor: any;
+      InfoWindowCtor: any;
+      eventNs: any;
+    } | null> => {
+      const gmaps: any = (window as any).google?.maps;
+      const importLib: any = gmaps?.importLibrary?.bind(gmaps);
+      let mapsModule: any = null;
+      try {
+        mapsModule = importLib ? await importLib("maps") : null;
+      } catch {}
+      const MapCtor = mapsModule?.Map || gmaps?.Map;
+      const MarkerCtor = mapsModule?.Marker || gmaps?.Marker;
+      const InfoWindowCtor = mapsModule?.InfoWindow || gmaps?.InfoWindow;
+      const eventNs = gmaps?.event || (window as any).google?.maps?.event || null;
+      if (MapCtor && MarkerCtor && InfoWindowCtor) {
+        return { gmaps, MapCtor, MarkerCtor, InfoWindowCtor, eventNs };
+      }
+      if (tries > 0) {
+        await new Promise((r) => setTimeout(r, 120));
+        return resolveConstructors(tries - 1);
+      }
+      return null;
+    };
+
+    const afterLoaded = async () => {
       if (cancelled) return;
       if (!containerRef.current) return;
-      const mapsPresent = Boolean((window as any).google?.maps);
-      const placesPresent = Boolean((window as any).google?.maps?.places);
+      const resolved = await resolveConstructors(8); // ~1s total retry window
+      const gmaps = resolved?.gmaps || (window as any).google?.maps;
+      const MapCtor = resolved?.MapCtor;
+      const MarkerCtor = resolved?.MarkerCtor;
+      const InfoWindowCtor = resolved?.InfoWindowCtor;
+      eventNsRef.current = resolved?.eventNs || null;
+      mapCtorRef.current = MapCtor;
+      markerCtorRef.current = MarkerCtor;
+      infoWindowCtorRef.current = InfoWindowCtor;
+
+      const mapsPresent = Boolean(gmaps);
+      const placesPresent = Boolean(gmaps?.places);
       if (!mapsPresent) {
         setMapsError("Google Maps JavaScript failed to load.");
+        return;
+      }
+      if (!MapCtor || !MarkerCtor || !InfoWindowCtor) {
+        setMapsError("Google Maps core modules unavailable. Check API enablement and key restrictions.");
         return;
       }
       if (!placesPresent) {
@@ -83,9 +130,9 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
         };
         const mapId = getOptionalMapId();
         if (mapId) mapOptions.mapId = mapId;
-        mapRef.current = new google.maps.Map(containerRef.current, mapOptions);
+        mapRef.current = new (mapCtorRef.current)(containerRef.current, mapOptions);
 
-        infoRef.current = new google.maps.InfoWindow();
+        infoRef.current = new (infoWindowCtorRef.current)();
 
         mapRef.current.addListener("idle", () => {
           const c = mapRef.current!.getCenter();
@@ -104,7 +151,20 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
           }
         });
       }
-    });
+    };
+
+    loadGoogleMaps()
+      .then(afterLoaded)
+      .catch(() => {
+        // If loader rejected (e.g., module import hiccup), try to continue using globals.
+        try {
+          const g = (window as any).google?.maps;
+          if (g) afterLoaded();
+          else setMapsError("Google Maps failed to initialize. Check API key restrictions and blockers.");
+        } catch {
+          setMapsError("Google Maps failed to initialize. Check API key restrictions and blockers.");
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -132,7 +192,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     }
     // Ensure marker exists
     if (!suburbMarkerRef.current) {
-      suburbMarkerRef.current = new google.maps.Marker({
+      suburbMarkerRef.current = new (markerCtorRef.current)({
         position: { lat: sel.lat, lng: sel.lng },
         map,
         title: sel.suburbName,
@@ -166,7 +226,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
       return;
     }
     if (!userMarkerRef.current) {
-      userMarkerRef.current = new google.maps.Marker({
+      userMarkerRef.current = new (markerCtorRef.current)({
         position: userLocation,
         map,
         title: "You are here",
@@ -193,7 +253,7 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     // Add or update markers
     places.forEach((p) => {
       if (!markersRef.current.has(p.place_id)) {
-        const marker = new google.maps.Marker({
+        const marker = new (markerCtorRef.current)({
           position: { lat: p.lat, lng: p.lng },
           map,
           title: p.name,
@@ -215,16 +275,29 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
           infoRef.current?.open({ map, anchor: marker });
 
           if (infoRef.current) {
-            // @ts-ignore Using Maps event util available at runtime
-            google.maps.event.addListenerOnce(infoRef.current, "domready", () => {
-              const btn = document.getElementById(optsId);
-              if (btn) {
-                btn.addEventListener("click", (ev) => {
-                  ev.stopPropagation();
-                  if (onPlaceOptions) onPlaceOptions(p.place_id);
-                });
-              }
-            });
+            const eventNs: any = eventNsRef.current;
+            if (eventNs?.addListenerOnce) {
+              // @ts-ignore Using Maps event util available at runtime
+              eventNs.addListenerOnce(infoRef.current, "domready", () => {
+                const btn = document.getElementById(optsId);
+                if (btn) {
+                  btn.addEventListener("click", (ev) => {
+                    ev.stopPropagation();
+                    if (onPlaceOptions) onPlaceOptions(p.place_id);
+                  });
+                }
+              });
+            } else {
+              setTimeout(() => {
+                const btn = document.getElementById(optsId);
+                if (btn) {
+                  btn.addEventListener("click", (ev) => {
+                    ev.stopPropagation();
+                    if (onPlaceOptions) onPlaceOptions(p.place_id);
+                  });
+                }
+              }, 0);
+            }
           }
         });
         markersRef.current.set(p.place_id, marker);
@@ -243,7 +316,8 @@ export default function MapView({ center, places, selectedPlaceId, userLocation,
     markersRef.current.forEach((marker, id) => {
       if (selectedPlaceId === id) {
         try {
-          marker.setZIndex((google as any).maps?.Marker?.MAX_ZINDEX ? (google as any).maps.Marker.MAX_ZINDEX + 1 : 1000);
+          const MK: any = markerCtorRef.current || (window as any).google?.maps?.Marker;
+          marker.setZIndex(MK?.MAX_ZINDEX ? MK.MAX_ZINDEX + 1 : 1000);
         } catch {
           marker.setZIndex(1000 as any);
         }
